@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
+import tempfile
 import unittest
 
 
@@ -18,10 +19,11 @@ class CodebaseHelpersTest(unittest.TestCase):
             "new/path.py",
         )
 
-    def test_codex_work_path_detection(self) -> None:
-        self.assertTrue(MODULE.is_codex_work_path(".codex"))
-        self.assertTrue(MODULE.is_codex_work_path(".codex/cbm/index.db"))
-        self.assertFalse(MODULE.is_codex_work_path("src/app.py"))
+    def test_tool_work_path_detection(self) -> None:
+        self.assertTrue(MODULE.is_tool_work_path(".codebase"))
+        self.assertTrue(MODULE.is_tool_work_path(".codebase/index/index.db"))
+        self.assertTrue(MODULE.is_tool_work_path(".codex/cbm/index.db"))
+        self.assertFalse(MODULE.is_tool_work_path("src/app.py"))
 
     def test_refresh_reason_missing_index(self) -> None:
         reason = MODULE.determine_refresh_reason(
@@ -79,6 +81,32 @@ class CodebaseHelpersTest(unittest.TestCase):
             self.assertEqual(MODULE.resolve_index_mode(DummyContext()), "moderate")
         finally:
             MODULE.load_metadata = original
+
+    def test_migrate_legacy_layout_moves_codex_data_to_codebase(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            repo_root = Path(tmpdir)
+            legacy_tool_dir = repo_root / ".codex" / "cbm"
+            legacy_cache_dir = legacy_tool_dir / "index"
+            legacy_cache_dir.mkdir(parents=True)
+            (legacy_cache_dir / "graph.db").write_text("db", encoding="utf-8")
+            (legacy_tool_dir / "metadata.json").write_text("{}", encoding="utf-8")
+
+            ctx = MODULE.RepoContext(
+                repo_root=repo_root,
+                tool_dir=repo_root / ".codebase",
+                cache_dir=repo_root / ".codebase" / "index",
+                metadata_path=repo_root / ".codebase" / "metadata.json",
+                legacy_tool_dir=legacy_tool_dir,
+                legacy_cache_dir=legacy_cache_dir,
+                legacy_metadata_path=legacy_tool_dir / "metadata.json",
+            )
+
+            migrated = MODULE.migrate_legacy_layout(ctx)
+
+            self.assertTrue(migrated)
+            self.assertTrue((repo_root / ".codebase" / "index" / "graph.db").exists())
+            self.assertTrue((repo_root / ".codebase" / "metadata.json").exists())
+            self.assertFalse(legacy_tool_dir.exists())
 
 
 if __name__ == "__main__":

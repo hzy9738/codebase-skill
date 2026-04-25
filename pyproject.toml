@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codebase-skill"
-version = "0.4.0"
-description = "CLI-first local wrapper for codebase-memory-mcp with optional Codex skill integration."
+version = "0.4.1"
+description = "CLI-first local wrapper for codebase-memory-mcp with repository-local .codebase storage."
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
-keywords = ["codex", "codebase", "code-index", "mcp", "skill", "cli"]
+keywords = ["codebase", "code-index", "mcp", "skill", "cli", "claude-code", "copilot"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Environment :: Console",

@@ -2,11 +2,11 @@
 
 Languages: **English** | [简体中文](README.zh-CN.md)
 
-> CLI-first local code indexing for Codex and agent workflows, backed by `codebase-memory-mcp`.
+> CLI-first local code indexing for agent workflows, backed by `codebase-memory-mcp`.
 
 `codebase-skill` is a local CLI plus an optional Codex skill wrapper for the official [`DeusData/codebase-memory-mcp`](https://github.com/DeusData/codebase-memory-mcp) project.
 
-It keeps indexes inside the current repository under `.codex/cbm/`, exposes a global `codebase` command, and avoids the MCP protocol at runtime.
+It keeps indexes inside the current repository under `.codebase/`, exposes a global `codebase` command, and avoids the MCP protocol at runtime.
 
 Quick links: [Install](#install) · [Quick start](#quick-start) · [Codex skill integration](#codex-skill-integration) · [Development](#development) · [GitHub publishing](#github-publishing)
 
@@ -14,16 +14,16 @@ Quick links: [Install](#install) · [Quick start](#quick-start) · [Codex skill 
 
 | Area | Decision |
 | --- | --- |
-| Index storage | Repository-local `.codex/cbm/` |
+| Index storage | Repository-local `.codebase/` |
 | Runtime model | Local CLI, no MCP protocol at runtime |
 | Upstream engine | `DeusData/codebase-memory-mcp` |
 | Primary interface | `codebase` shell command |
 | Agent integration | Optional `~/.cc-switch/skills/codebase/SKILL.md` |
-| Target workflow | Codex, local CLI, agent-heavy repository retrieval |
+| Target workflow | Codex, Claude Code, OpenCode, Copilot, local CLI |
 
 ## What you get
 
-- Repository-local index storage under `.codex/cbm/`
+- Repository-local index storage under `.codebase/`
 - A normal shell command: `codebase`
 - Optional Codex skill install under `~/.cc-switch/skills/codebase`
 - Better defaults for agent workflows: `func`, `calls`, `snippet`, `search-code`, `detect-changes`, `refresh`
@@ -36,9 +36,9 @@ Quick links: [Install](#install) · [Quick start](#quick-start) · [Codex skill 
 - project-local storage conventions
 - a CLI-first workflow that agents can call directly
 - refresh metadata and dirty-worktree detection
-- a small skill stub that tells Codex to use the `codebase` command first
+- a small optional skill stub for Codex users
 
-If you want raw upstream behavior, call the upstream tool directly. If you want a pragmatic local retrieval workflow for Codex, use this repo.
+If you want raw upstream behavior, call the upstream tool directly. If you want a pragmatic local retrieval workflow for Codex, Claude Code, OpenCode, Copilot, or plain shell use, use this repo.
 
 ## Why this repo exists
 
@@ -46,7 +46,7 @@ This project is for teams or individuals who want code-index style retrieval wit
 
 - Keep indexing local to the repository instead of scattering state elsewhere.
 - Give agents a stable `codebase` command instead of a protocol dependency.
-- Keep `AGENTS.md` simple: use `codebase` first, then fall back to `rg`.
+- Keep repo instructions simple: use `codebase` first, then fall back to `rg`.
 - Reuse the upstream graph/index engine without inheriting MCP runtime overhead.
 
 ## Install
@@ -87,7 +87,7 @@ The installer:
 - keeps the executable at `~/.local/bin/codebase`
 - installs upstream `codebase-memory-mcp` only when neither `codebase-memory-mcp` nor `uvx` is available
 
-If you want the Codex skill as well:
+If you want the optional Codex skill as well:
 
 ```bash
 bash scripts/install.sh --install-skill
@@ -120,15 +120,17 @@ codebase --version
 `codebase` auto-detects the current git repository and writes only to:
 
 ```text
-<repo>/.codex/cbm/
+<repo>/.codebase/
   index/*.db
   metadata.json
 ```
 
-If you do not want `.codex/` to appear in `git status`, add a local-only exclude:
+If an older `.codex/cbm/` layout exists and `.codebase/` does not, the CLI migrates that local index to `.codebase/` on first use.
+
+If you do not want `.codebase/` to appear in `git status`, add a local-only exclude:
 
 ```bash
-printf '\n.codex/\n' >> .git/info/exclude
+printf '\n.codebase/\n' >> .git/info/exclude
 ```
 
 Typical workflow:
@@ -161,7 +163,9 @@ Recommended `AGENTS.md` rule:
 - 内部代码和文档检索优先使用 `codebase` skill，不可用或无结果时再降级到 `rg`、`fd` 或其他命令。
 ```
 
-This keeps your agent guidance short while still making `codebase` the default indexed retrieval path.
+This keeps your Codex guidance short while still making `codebase` the default indexed retrieval path.
+
+For Claude Code, OpenCode, Copilot, or other tools that can run shell commands, you usually do not need a skill wrapper at all. Call the `codebase` CLI directly.
 
 ## Commands
 
@@ -169,7 +173,7 @@ This keeps your agent guidance short while still making `codebase` the default i
 - `index`: build or rebuild the local index
 - `refresh`: rebuild only when the repo or index mode changed
 - `projects`: list indexed projects in the current local cache
-- `reset`: delete `.codex/cbm`
+- `reset`: delete `.codebase`
 - `self-check`: verify PATH, dependencies, repo detection, and index wiring
 - `func`: search indexed functions and methods
 - `calls`: show callers and callees for a resolved symbol

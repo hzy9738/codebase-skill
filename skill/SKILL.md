@@ -1,6 +1,6 @@
 ---
 name: codebase
-description: Repository-local deep code retrieval skill that uses the global `codebase` CLI instead of MCP. Use when you need indexed function lookup, call graph traversal, code snippets, code search, architecture summaries, or change impact analysis inside a git repo. Prefer this before `rg` when the local `.codex/cbm/` index exists or can be created.
+description: Repository-local deep code retrieval skill that uses the global `codebase` CLI instead of MCP. Use when you need indexed function lookup, call graph traversal, code snippets, code search, architecture summaries, or change impact analysis inside a git repo. Prefer this before `rg` when the local `.codebase/` index exists or can be created.
 ---
 
 # Codebase
@@ -30,6 +30,7 @@ codebase detect-changes
 
 ## Notes
 
-- All local index data lives under `<repo>/.codex/cbm/`.
-- Add `.codex/` to `.git/info/exclude` if you do not want it in `git status`.
+- All local index data lives under `<repo>/.codebase/`.
+- Older `.codex/cbm/` layouts are migrated to `.codebase/` automatically on first use.
+- Add `.codebase/` to `.git/info/exclude` if you do not want it in `git status`.
 - `search-graph`, `trace-path`, `query-graph`, `architecture`, `schema`, `index-status`, `adr`, and `ingest-traces` expose more of the upstream tool surface when needed.

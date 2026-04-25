@@ -6,7 +6,7 @@ This project is intentionally narrow:
 
 - keep `codebase` CLI-first
 - keep Codex skill integration optional
-- keep index data repository-local under `.codex/cbm/`
+- keep index data repository-local under `.codebase/`
 - avoid adding runtime MCP protocol requirements
 
 Changes that increase complexity should justify the maintenance cost clearly.
@@ -47,7 +47,7 @@ If you change repo detection, indexing, or refresh behavior, test against a real
 - Preserve the `codebase` command surface unless there is a strong compatibility reason.
 - Prefer small wrappers over large custom indexing logic.
 - Keep the skill stub minimal. Workflow detail should live in the CLI and README, not in a long skill prompt.
-- Do not add project-level index files outside `.codex/cbm/`.
+- Do not add project-level index files outside `.codebase/`.
 - Keep macOS and Ubuntu 24 support working together.
 
 ## Pull requests

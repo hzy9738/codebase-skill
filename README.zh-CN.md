@@ -2,11 +2,11 @@
 
 语言： [English](README.md) | **简体中文**
 
-> 面向 Codex 和各类 agent 工作流的本地代码索引 CLI，底层基于 `codebase-memory-mcp`。
+> 面向各类 agent 工作流的本地代码索引 CLI，底层基于 `codebase-memory-mcp`。
 
 `codebase-skill` 是一个本地 CLI 工具，并额外提供一个可选的 Codex skill 封装；底层使用官方 [`DeusData/codebase-memory-mcp`](https://github.com/DeusData/codebase-memory-mcp) 作为索引和图查询引擎。
 
-它会把索引存到当前仓库的 `.codex/cbm/` 下，对外提供全局 `codebase` 命令，并且在日常使用时不依赖 MCP 协议。
+它会把索引存到当前仓库的 `.codebase/` 下，对外提供全局 `codebase` 命令，并且在日常使用时不依赖 MCP 协议。
 
 快速导航：[安装](#安装) · [快速开始](#快速开始) · [Codex skill 集成](#codex-skill-集成) · [开发](#开发) · [GitHub 发布](#github-发布)
 
@@ -14,16 +14,16 @@
 
 | 项目 | 方案 |
 | --- | --- |
-| 索引存储位置 | 仓库内的 `.codex/cbm/` |
+| 索引存储位置 | 仓库内的 `.codebase/` |
 | 运行时模型 | 本地 CLI，不走 MCP 协议 |
 | 底层引擎 | `DeusData/codebase-memory-mcp` |
 | 主入口 | `codebase` 命令 |
 | Agent 集成 | 可选安装到 `~/.cc-switch/skills/codebase/SKILL.md` |
-| 目标场景 | Codex、本地 CLI、重度 agent 代码检索 |
+| 目标场景 | Codex、Claude Code、OpenCode、Copilot、本地 CLI |
 
 ## 你能得到什么
 
-- 仓库级本地索引，数据放在 `.codex/cbm/`
+- 仓库级本地索引，数据放在 `.codebase/`
 - 一个普通 shell 命令：`codebase`
 - 可选的 Codex skill 安装
 - 更适合 agent 工作流的默认命令：`func`、`calls`、`snippet`、`search-code`、`detect-changes`、`refresh`
@@ -36,7 +36,7 @@
 - 仓库内本地索引存储约定
 - 更适合 agent 直接调用的 CLI 工作流
 - 刷新元数据和脏工作区检测
-- 一个很小的 skill stub，让 Codex 优先使用 `codebase`
+- 一个很小的可选 skill stub，供 Codex 用户接入
 
 如果你想直接使用上游原始能力，可以直接调用上游工具；如果你想要更务实的本地代码检索工作流，就用这个仓库。
 
@@ -46,7 +46,7 @@
 
 - 把索引留在仓库本地，而不是散落到外部状态目录。
 - 让 agent 直接调用稳定的 `codebase` 命令，而不是依赖协议层。
-- 让 `AGENTS.md` 保持简单：优先 `codebase`，再降级到 `rg`。
+- 让仓库说明或 agent 提示保持简单：优先 `codebase`，再降级到 `rg`。
 - 复用上游图引擎能力，但避免 MCP 运行时开销。
 
 ## 安装
@@ -87,7 +87,7 @@ bash scripts/install.sh
 - 把可执行命令安装到 `~/.local/bin/codebase`
 - 只有在 `codebase-memory-mcp` 和 `uvx` 都不存在时，才自动安装上游工具
 
-如果还想同时安装 Codex skill：
+如果还想同时安装可选的 Codex skill：
 
 ```bash
 bash scripts/install.sh --install-skill
@@ -120,15 +120,17 @@ codebase --version
 `codebase` 会自动识别当前 git 仓库，并且只写入：
 
 ```text
-<repo>/.codex/cbm/
+<repo>/.codebase/
   index/*.db
   metadata.json
 ```
 
-如果你不想让 `.codex/` 出现在 `git status` 里，可以加到本地排除：
+如果仓库里只有旧的 `.codex/cbm/`，还没有 `.codebase/`，CLI 会在首次使用时自动迁移到 `.codebase/`。
+
+如果你不想让 `.codebase/` 出现在 `git status` 里，可以加到本地排除：
 
 ```bash
-printf '\n.codex/\n' >> .git/info/exclude
+printf '\n.codebase/\n' >> .git/info/exclude
 ```
 
 典型工作流：
@@ -161,7 +163,9 @@ bash scripts/install.sh --install-skill
 - 内部代码和文档检索优先使用 `codebase` skill，不可用或无结果时再降级到 `rg`、`fd` 或其他命令。
 ```
 
-这样 agent 的默认检索路径就会更稳定。
+这样 Codex 下的默认检索路径就会更稳定。
+
+如果你用的是 Claude Code、OpenCode、Copilot，或者任何能直接执行 shell 命令的工具，通常不需要 skill 封装，直接调用 `codebase` CLI 就可以。
 
 ## 命令列表
 
@@ -169,7 +173,7 @@ bash scripts/install.sh --install-skill
 - `index`：构建或重建本地索引
 - `refresh`：仅在仓库状态或索引模式变化时重建
 - `projects`：列出当前本地缓存里的索引项目
-- `reset`：删除 `.codex/cbm`
+- `reset`：删除 `.codebase`
 - `self-check`：检查 PATH、依赖、仓库识别和工具连通性
 - `func`：搜索已索引的函数和方法
 - `calls`：查看某个符号的调用方和被调用方

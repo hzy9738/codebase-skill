@@ -18,8 +18,9 @@ from typing import Any
 
 
 APP_NAME = "codebase"
-VERSION = "0.4.0"
-INDEX_SUBDIR = Path(".codex") / "cbm"
+VERSION = "0.4.1"
+INDEX_SUBDIR = Path(".codebase")
+LEGACY_INDEX_SUBDIR = Path(".codex") / "cbm"
 INDEX_CACHE_DIRNAME = "index"
 METADATA_FILENAME = "metadata.json"
 FUNCTION_LABELS = {"Function", "Method"}
@@ -35,6 +36,9 @@ class RepoContext:
     tool_dir: Path
     cache_dir: Path
     metadata_path: Path
+    legacy_tool_dir: Path
+    legacy_cache_dir: Path
+    legacy_metadata_path: Path
 
 
 def utc_now() -> str:
@@ -73,14 +77,19 @@ def parse_status_path(line: str) -> str:
     return path
 
 
-def is_codex_work_path(path: str) -> bool:
+def is_tool_work_path(path: str) -> bool:
     normalized = path.strip()
     if normalized.startswith("./"):
         normalized = normalized[2:]
-    return normalized == ".codex" or normalized.startswith(".codex/")
+    return (
+        normalized == INDEX_SUBDIR.as_posix()
+        or normalized.startswith(f"{INDEX_SUBDIR.as_posix()}/")
+        or normalized == LEGACY_INDEX_SUBDIR.as_posix()
+        or normalized.startswith(f"{LEGACY_INDEX_SUBDIR.as_posix()}/")
+    )
 
 
-def repo_has_non_codex_changes(cwd: Path | None = None) -> bool:
+def repo_has_non_tool_changes(cwd: Path | None = None) -> bool:
     proc = subprocess.run(
         ["git", "status", "--porcelain", "--untracked-files=all"],
         cwd=str(cwd) if cwd else None,
@@ -92,7 +101,7 @@ def repo_has_non_codex_changes(cwd: Path | None = None) -> bool:
     for raw_line in proc.stdout.splitlines():
         if not raw_line.strip():
             continue
-        if is_codex_work_path(parse_status_path(raw_line)):
+        if is_tool_work_path(parse_status_path(raw_line)):
             continue
         return True
     return False
@@ -102,12 +111,34 @@ def detect_repo_context(cwd: Path | None = None) -> RepoContext:
     repo_root = Path(git_output(["rev-parse", "--show-toplevel"], cwd=cwd)).resolve()
     tool_dir = repo_root / INDEX_SUBDIR
     cache_dir = tool_dir / INDEX_CACHE_DIRNAME
+    legacy_tool_dir = repo_root / LEGACY_INDEX_SUBDIR
     return RepoContext(
         repo_root=repo_root,
         tool_dir=tool_dir,
         cache_dir=cache_dir,
         metadata_path=tool_dir / METADATA_FILENAME,
+        legacy_tool_dir=legacy_tool_dir,
+        legacy_cache_dir=legacy_tool_dir / INDEX_CACHE_DIRNAME,
+        legacy_metadata_path=legacy_tool_dir / METADATA_FILENAME,
     )
+
+
+def migrate_legacy_layout(ctx: RepoContext) -> bool:
+    if ctx.tool_dir.exists() or not ctx.legacy_tool_dir.exists():
+        return False
+    shutil.move(str(ctx.legacy_tool_dir), str(ctx.tool_dir))
+    legacy_parent = ctx.legacy_tool_dir.parent
+    try:
+        legacy_parent.rmdir()
+    except OSError:
+        pass
+    return True
+
+
+def active_repo_context(cwd: Path | None = None) -> RepoContext:
+    ctx = detect_repo_context(cwd)
+    migrate_legacy_layout(ctx)
+    return ctx
 
 
 def resolve_cbm_runner() -> list[str]:
@@ -302,8 +333,10 @@ def write_metadata(ctx: RepoContext, *, mode: str, project_name: str) -> None:
 
 
 def perform_index(ctx: RepoContext, *, mode: str, clean: bool = False) -> dict[str, Any]:
-    if clean and ctx.tool_dir.exists():
-        shutil.rmtree(ctx.tool_dir)
+    if clean:
+        for path in [ctx.tool_dir, ctx.legacy_tool_dir]:
+            if path.exists():
+                shutil.rmtree(path)
     ctx.cache_dir.mkdir(parents=True, exist_ok=True)
 
     run_cbm_tool(
@@ -561,14 +594,14 @@ def print_json(data: Any) -> None:
 
 
 def command_status(args: argparse.Namespace) -> int:
-    ctx = detect_repo_context()
+    ctx = active_repo_context()
     payload: dict[str, Any] = {
         "repo_root": str(ctx.repo_root),
         "tool_dir": str(ctx.tool_dir),
         "cache_dir": str(ctx.cache_dir),
         "db_files": [path.name for path in indexed_db_files(ctx)],
         "head_commit": git_head_commit(ctx.repo_root),
-        "repo_dirty": repo_has_non_codex_changes(ctx.repo_root),
+        "repo_dirty": repo_has_non_tool_changes(ctx.repo_root),
     }
     metadata = load_metadata(ctx)
     if metadata:
@@ -605,7 +638,7 @@ def command_status(args: argparse.Namespace) -> int:
 
 
 def command_index(args: argparse.Namespace) -> int:
-    ctx = detect_repo_context()
+    ctx = active_repo_context()
     payload = perform_index(ctx, mode=args.mode, clean=args.clean)
     if args.json:
         print_json(payload)
@@ -618,7 +651,7 @@ def command_index(args: argparse.Namespace) -> int:
 
 
 def command_projects(args: argparse.Namespace) -> int:
-    ctx = detect_repo_context()
+    ctx = active_repo_context()
     projects = list_projects(ctx)
     if args.json:
         print_json({"projects": projects})
@@ -628,14 +661,14 @@ def command_projects(args: argparse.Namespace) -> int:
 
 
 def command_refresh(args: argparse.Namespace) -> int:
-    ctx = detect_repo_context()
+    ctx = active_repo_context()
     metadata = load_metadata(ctx)
     mode = resolve_index_mode(ctx, args.mode)
     reason = "forced" if args.force else determine_refresh_reason(
         has_db=bool(indexed_db_files(ctx)),
         metadata=metadata,
         current_head=git_head_commit(ctx.repo_root),
-        repo_dirty=repo_has_non_codex_changes(ctx.repo_root),
+        repo_dirty=repo_has_non_tool_changes(ctx.repo_root),
         requested_mode=args.mode,
     )
 
@@ -668,15 +701,16 @@ def command_refresh(args: argparse.Namespace) -> int:
 
 
 def command_reset(args: argparse.Namespace) -> int:
-    ctx = detect_repo_context()
+    ctx = active_repo_context()
     if ctx.cache_dir.exists():
         try:
             project_name = resolve_project_name(ctx)
             run_cbm_tool(ctx, "delete_project", {"project": project_name})
         except ToolError:
             pass
-    if ctx.tool_dir.exists():
-        shutil.rmtree(ctx.tool_dir)
+    for path in [ctx.tool_dir, ctx.legacy_tool_dir]:
+        if path.exists():
+            shutil.rmtree(path)
     if args.json:
         print_json({"status": "deleted", "tool_dir": str(ctx.tool_dir)})
     else:
@@ -700,10 +734,10 @@ def command_self_check(args: argparse.Namespace) -> int:
         payload["cbm_runner_error"] = str(exc)
 
     try:
-        ctx = detect_repo_context()
+        ctx = active_repo_context()
         payload["inside_git_repo"] = True
         payload["repo_root"] = str(ctx.repo_root)
-        payload["repo_dirty"] = repo_has_non_codex_changes(ctx.repo_root)
+        payload["repo_dirty"] = repo_has_non_tool_changes(ctx.repo_root)
         payload["head_commit"] = git_head_commit(ctx.repo_root)
         payload["index_exists"] = bool(indexed_db_files(ctx))
         payload["metadata_exists"] = bool(load_metadata(ctx))
@@ -722,7 +756,7 @@ def command_self_check(args: argparse.Namespace) -> int:
 
 
 def command_func(args: argparse.Namespace) -> int:
-    ctx = detect_repo_context()
+    ctx = active_repo_context()
     project_name = ensure_project_name(ctx)
     search = search_functions(ctx, project_name, args.keyword, use_regex=args.regex)
     results = search.get("results", [])
@@ -740,7 +774,7 @@ def command_func(args: argparse.Namespace) -> int:
 
 
 def command_calls(args: argparse.Namespace) -> int:
-    ctx = detect_repo_context()
+    ctx = active_repo_context()
     project_name = ensure_project_name(ctx)
     symbol = resolve_symbol(
         ctx,
@@ -764,7 +798,7 @@ def command_calls(args: argparse.Namespace) -> int:
 
 
 def command_snippet(args: argparse.Namespace) -> int:
-    ctx = detect_repo_context()
+    ctx = active_repo_context()
     project_name = ensure_project_name(ctx)
     symbol = resolve_symbol(
         ctx,
@@ -786,7 +820,7 @@ def command_snippet(args: argparse.Namespace) -> int:
 
 
 def command_search_graph(args: argparse.Namespace) -> int:
-    ctx = detect_repo_context()
+    ctx = active_repo_context()
     project_name = ensure_project_name(ctx)
     payload: dict[str, Any] = {"project": project_name}
     if args.term:
@@ -808,7 +842,7 @@ def command_search_graph(args: argparse.Namespace) -> int:
 
 
 def command_trace_path(args: argparse.Namespace) -> int:
-    ctx = detect_repo_context()
+    ctx = active_repo_context()
     project_name = ensure_project_name(ctx)
     payload: dict[str, Any] = {
         "project": project_name,
@@ -826,7 +860,7 @@ def command_trace_path(args: argparse.Namespace) -> int:
 
 
 def command_search_code(args: argparse.Namespace) -> int:
-    ctx = detect_repo_context()
+    ctx = active_repo_context()
     project_name = ensure_project_name(ctx)
     payload: dict[str, Any] = {
         "project": project_name,
@@ -852,7 +886,7 @@ def command_search_code(args: argparse.Namespace) -> int:
 
 
 def command_query_graph(args: argparse.Namespace) -> int:
-    ctx = detect_repo_context()
+    ctx = active_repo_context()
     project_name = ensure_project_name(ctx)
     payload: dict[str, Any] = {"project": project_name, "query": args.query}
     if args.max_rows is not None:
@@ -866,7 +900,7 @@ def command_query_graph(args: argparse.Namespace) -> int:
 
 
 def command_detect_changes(args: argparse.Namespace) -> int:
-    ctx = detect_repo_context()
+    ctx = active_repo_context()
     project_name = ensure_project_name(ctx)
     payload: dict[str, Any] = {
         "project": project_name,
@@ -885,7 +919,7 @@ def command_detect_changes(args: argparse.Namespace) -> int:
 
 
 def command_architecture(args: argparse.Namespace) -> int:
-    ctx = detect_repo_context()
+    ctx = active_repo_context()
     project_name = ensure_project_name(ctx)
     payload = {
         "project": project_name,
@@ -897,7 +931,7 @@ def command_architecture(args: argparse.Namespace) -> int:
 
 
 def command_schema(args: argparse.Namespace) -> int:
-    ctx = detect_repo_context()
+    ctx = active_repo_context()
     project_name = ensure_project_name(ctx)
     response = run_cbm_tool(ctx, "get_graph_schema", {"project": project_name})
     print_json(response)
@@ -905,7 +939,7 @@ def command_schema(args: argparse.Namespace) -> int:
 
 
 def command_index_status(args: argparse.Namespace) -> int:
-    ctx = detect_repo_context()
+    ctx = active_repo_context()
     project_name = ensure_project_name(ctx)
     response = run_cbm_tool(ctx, "index_status", {"project": project_name})
     if args.json:
@@ -921,7 +955,7 @@ def command_index_status(args: argparse.Namespace) -> int:
 
 
 def command_adr(args: argparse.Namespace) -> int:
-    ctx = detect_repo_context()
+    ctx = active_repo_context()
     project_name = ensure_project_name(ctx)
     payload: dict[str, Any] = {"project": project_name, "mode": args.mode}
     if args.mode == "update":
@@ -940,7 +974,7 @@ def command_adr(args: argparse.Namespace) -> int:
 
 
 def command_ingest_traces(args: argparse.Namespace) -> int:
-    ctx = detect_repo_context()
+    ctx = active_repo_context()
     project_name = ensure_project_name(ctx)
     trace_path = Path(args.file)
     raw = json.loads(trace_path.read_text(encoding="utf-8"))
@@ -967,11 +1001,11 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=textwrap.dedent(
             """\
             Commands:
-              status                Show local index state under .codex/cbm
+              status                Show local index state under .codebase
               index                 Build or rebuild the local index
               refresh               Rebuild only when the repo or mode changed
               projects              List indexed projects in current local cache
-              reset                 Delete the local .codex/cbm index
+              reset                 Delete the local .codebase index
               self-check            Verify environment, repo, and tool wiring
               func <keyword>        Search functions and methods
               calls <symbol>        Show callers/callees for one resolved symbol
@@ -996,14 +1030,14 @@ def build_parser() -> argparse.ArgumentParser:
     status.add_argument("--json", action="store_true", help="print JSON")
     status.set_defaults(func=command_status)
 
-    index = subparsers.add_parser("index", help="build the local index under .codex/cbm")
+    index = subparsers.add_parser("index", help="build the local index under .codebase")
     index.add_argument(
         "--mode",
         choices=["full", "moderate", "fast"],
         default="full",
         help="indexing depth",
     )
-    index.add_argument("--clean", action="store_true", help="remove existing .codex/cbm before indexing")
+    index.add_argument("--clean", action="store_true", help="remove existing .codebase before indexing")
     index.add_argument("--json", action="store_true", help="print JSON")
     index.set_defaults(func=command_index)
 
@@ -1014,7 +1048,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="override index mode; if omitted, reuse metadata mode or default to full",
     )
     refresh.add_argument("--force", action="store_true", help="refresh even if already up to date")
-    refresh.add_argument("--clean", action="store_true", help="remove existing .codex/cbm before refreshing")
+    refresh.add_argument("--clean", action="store_true", help="remove existing .codebase before refreshing")
     refresh.add_argument("--json", action="store_true", help="print JSON")
     refresh.set_defaults(func=command_refresh)
 
@@ -1022,7 +1056,7 @@ def build_parser() -> argparse.ArgumentParser:
     projects.add_argument("--json", action="store_true", help="print JSON")
     projects.set_defaults(func=command_projects)
 
-    reset = subparsers.add_parser("reset", help="delete local .codex/cbm index")
+    reset = subparsers.add_parser("reset", help="delete local .codebase index")
     reset.add_argument("--json", action="store_true", help="print JSON")
     reset.set_defaults(func=command_reset)
 
