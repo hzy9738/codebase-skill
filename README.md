@@ -1,5 +1,7 @@
 # codebase-skill
 
+Languages: **English** | [简体中文](README.zh-CN.md)
+
 > CLI-first local code indexing for Codex and agent workflows, backed by `codebase-memory-mcp`.
 
 `codebase-skill` is a local CLI plus an optional Codex skill wrapper for the official [`DeusData/codebase-memory-mcp`](https://github.com/DeusData/codebase-memory-mcp) project.
