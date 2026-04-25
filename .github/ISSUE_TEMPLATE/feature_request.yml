@@ -1,0 +1,40 @@
+name: Feature request
+description: Propose a focused improvement to the CLI, skill workflow, or installation path.
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What workflow is currently weak, slow, or missing?
+      placeholder: Describe the user problem first.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: What should the project add or change?
+      placeholder: Describe the CLI or workflow change.
+    validations:
+      required: true
+
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Constraints
+      description: Compatibility, platform, or design constraints that matter
+      placeholder: Keep repository-local indexes, avoid MCP runtime dependency, preserve CLI compatibility...
+    validations:
+      required: false
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What are you doing today instead?
+      placeholder: rg, upstream codebase-memory-mcp CLI, a custom script...
+    validations:
+      required: false

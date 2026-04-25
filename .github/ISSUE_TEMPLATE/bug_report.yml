@@ -1,0 +1,65 @@
+name: Bug report
+description: Report a reproducible bug in the CLI, installer, or skill integration.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What broke, and what did you expect instead?
+      placeholder: A short description of the problem.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - CLI
+        - Installer
+        - Skill integration
+        - Packaging
+        - CI
+        - Documentation
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, Python version, and shell
+      placeholder: macOS 15, Python 3.11, zsh
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      placeholder: |
+        1. Run ...
+        2. Open ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Error output
+      description: Paste the relevant command output or traceback.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification tried
+      description: List the commands you already ran, such as smoke tests or install checks.
+      placeholder: bash tests/smoke_test.sh
+    validations:
+      required: false
