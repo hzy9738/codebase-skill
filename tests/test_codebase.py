@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 import sys
-import tempfile
 import unittest
+from unittest import mock
 
 
 SRC_DIR = Path(__file__).resolve().parents[1] / "src"
@@ -21,9 +21,38 @@ class CodebaseHelpersTest(unittest.TestCase):
 
     def test_tool_work_path_detection(self) -> None:
         self.assertTrue(MODULE.is_tool_work_path(".codebase"))
-        self.assertTrue(MODULE.is_tool_work_path(".codebase/index/index.db"))
-        self.assertTrue(MODULE.is_tool_work_path(".codex/cbm/index.db"))
+        self.assertTrue(MODULE.is_tool_work_path(".codebase/codex/index.db"))
         self.assertFalse(MODULE.is_tool_work_path("src/app.py"))
+
+    def test_normalize_session_aliases(self) -> None:
+        self.assertEqual(MODULE.normalize_session_name("codex"), "codex")
+        self.assertEqual(MODULE.normalize_session_name("claude-code"), "claudecode")
+        self.assertEqual(MODULE.normalize_session_name("Open Code"), "opencode")
+        self.assertEqual(MODULE.normalize_session_name(""), "default")
+
+    def test_detect_session_from_command(self) -> None:
+        self.assertEqual(
+            MODULE.detect_session_from_command("/Users/example/.nvm/bin/codex"),
+            "codex",
+        )
+        self.assertEqual(
+            MODULE.detect_session_from_command("node /opt/tools/claude"),
+            "claudecode",
+        )
+        self.assertEqual(
+            MODULE.detect_session_from_command("/opt/homebrew/bin/opencode --run"),
+            "opencode",
+        )
+
+    def test_detect_repo_context_uses_session_namespace(self) -> None:
+        fake_repo = Path("/tmp/example-repo").resolve()
+        with mock.patch.object(MODULE, "git_output", return_value=str(fake_repo)):
+            ctx = MODULE.detect_repo_context(session="claude-code")
+        self.assertEqual(ctx.repo_root, fake_repo)
+        self.assertEqual(ctx.root_dir, fake_repo / ".codebase")
+        self.assertEqual(ctx.session_name, "claudecode")
+        self.assertEqual(ctx.session_dir, fake_repo / ".codebase" / "claudecode")
+        self.assertEqual(ctx.cache_dir, fake_repo / ".codebase" / "claudecode" / "index")
 
     def test_refresh_reason_missing_index(self) -> None:
         reason = MODULE.determine_refresh_reason(
@@ -82,31 +111,10 @@ class CodebaseHelpersTest(unittest.TestCase):
         finally:
             MODULE.load_metadata = original
 
-    def test_migrate_legacy_layout_moves_codex_data_to_codebase(self) -> None:
-        with tempfile.TemporaryDirectory() as tmpdir:
-            repo_root = Path(tmpdir)
-            legacy_tool_dir = repo_root / ".codex" / "cbm"
-            legacy_cache_dir = legacy_tool_dir / "index"
-            legacy_cache_dir.mkdir(parents=True)
-            (legacy_cache_dir / "graph.db").write_text("db", encoding="utf-8")
-            (legacy_tool_dir / "metadata.json").write_text("{}", encoding="utf-8")
-
-            ctx = MODULE.RepoContext(
-                repo_root=repo_root,
-                tool_dir=repo_root / ".codebase",
-                cache_dir=repo_root / ".codebase" / "index",
-                metadata_path=repo_root / ".codebase" / "metadata.json",
-                legacy_tool_dir=legacy_tool_dir,
-                legacy_cache_dir=legacy_cache_dir,
-                legacy_metadata_path=legacy_tool_dir / "metadata.json",
-            )
-
-            migrated = MODULE.migrate_legacy_layout(ctx)
-
-            self.assertTrue(migrated)
-            self.assertTrue((repo_root / ".codebase" / "index" / "graph.db").exists())
-            self.assertTrue((repo_root / ".codebase" / "metadata.json").exists())
-            self.assertFalse(legacy_tool_dir.exists())
+    def test_current_platform_slug(self) -> None:
+        with mock.patch.object(MODULE.platform, "system", return_value="Darwin"):
+            with mock.patch.object(MODULE.platform, "machine", return_value="arm64"):
+                self.assertEqual(MODULE.current_platform_slug(), "darwin-arm64")
 
 
 if __name__ == "__main__":

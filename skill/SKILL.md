@@ -24,13 +24,15 @@ codebase detect-changes
 - Run inside a git repository.
 - On a fresh repo, start with `codebase index --mode moderate` or `codebase index --mode full`.
 - Prefer `codebase refresh` once a repo is already indexed.
+- Index data lives under `<repo>/.codebase/<session>/`.
+- Session namespaces auto-detect to `codex`, `claudecode`, or `opencode` when possible. Use `codebase --session <name> ...` or `CODEBASE_SESSION=<name>` to override.
+- There is no automatic runtime download on first use. Install `codebase-memory-mcp` explicitly with `codebase install-runtime` or the install script.
 - Use `func` to find symbols, `calls` to traverse graph edges, and `snippet` to inspect source.
 - Use `search-code` for indexed text retrieval.
 - Fall back to `rg` only when `codebase` is unavailable or returns no useful result.
 
 ## Notes
 
-- All local index data lives under `<repo>/.codebase/`.
-- Older `.codex/cbm/` layouts are migrated to `.codebase/` automatically on first use.
+- Runtime resolution order is: `CBM_CODEBASE_MEMORY_BIN` -> `PATH` -> `~/.local/bin`.
 - Add `.codebase/` to `.git/info/exclude` if you do not want it in `git status`.
 - `search-graph`, `trace-path`, `query-graph`, `architecture`, `schema`, `index-status`, `adr`, and `ingest-traces` expose more of the upstream tool surface when needed.

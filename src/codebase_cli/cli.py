@@ -18,12 +18,23 @@ from typing import Any
 
 
 APP_NAME = "codebase"
-VERSION = "0.4.1"
-INDEX_SUBDIR = Path(".codebase")
-LEGACY_INDEX_SUBDIR = Path(".codex") / "cbm"
+VERSION = "0.4.2"
+INDEX_ROOT_DIRNAME = ".codebase"
 INDEX_CACHE_DIRNAME = "index"
 METADATA_FILENAME = "metadata.json"
 FUNCTION_LABELS = {"Function", "Method"}
+DEFAULT_SESSION_NAME = "default"
+SESSION_OVERRIDE_ENV_VARS = ("CODEBASE_SESSION", "CBM_SESSION")
+SESSION_ALIAS_MAP = {
+    "claude": "claudecode",
+    "claude-code": "claudecode",
+    "claudecode": "claudecode",
+    "codex": "codex",
+    "open-code": "opencode",
+    "opencode": "opencode",
+}
+CBM_INSTALL_URL = "https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh"
+REPO_ROOT_DIR = Path(__file__).resolve().parents[2]
 
 
 class ToolError(RuntimeError):
@@ -33,12 +44,12 @@ class ToolError(RuntimeError):
 @dataclass(frozen=True)
 class RepoContext:
     repo_root: Path
-    tool_dir: Path
+    root_dir: Path
+    session_name: str
+    session_source: str
+    session_dir: Path
     cache_dir: Path
     metadata_path: Path
-    legacy_tool_dir: Path
-    legacy_cache_dir: Path
-    legacy_metadata_path: Path
 
 
 def utc_now() -> str:
@@ -81,12 +92,7 @@ def is_tool_work_path(path: str) -> bool:
     normalized = path.strip()
     if normalized.startswith("./"):
         normalized = normalized[2:]
-    return (
-        normalized == INDEX_SUBDIR.as_posix()
-        or normalized.startswith(f"{INDEX_SUBDIR.as_posix()}/")
-        or normalized == LEGACY_INDEX_SUBDIR.as_posix()
-        or normalized.startswith(f"{LEGACY_INDEX_SUBDIR.as_posix()}/")
-    )
+    return normalized == INDEX_ROOT_DIRNAME or normalized.startswith(f"{INDEX_ROOT_DIRNAME}/")
 
 
 def repo_has_non_tool_changes(cwd: Path | None = None) -> bool:
@@ -107,56 +113,30 @@ def repo_has_non_tool_changes(cwd: Path | None = None) -> bool:
     return False
 
 
-def detect_repo_context(cwd: Path | None = None) -> RepoContext:
-    repo_root = Path(git_output(["rev-parse", "--show-toplevel"], cwd=cwd)).resolve()
-    tool_dir = repo_root / INDEX_SUBDIR
-    cache_dir = tool_dir / INDEX_CACHE_DIRNAME
-    legacy_tool_dir = repo_root / LEGACY_INDEX_SUBDIR
-    return RepoContext(
-        repo_root=repo_root,
-        tool_dir=tool_dir,
-        cache_dir=cache_dir,
-        metadata_path=tool_dir / METADATA_FILENAME,
-        legacy_tool_dir=legacy_tool_dir,
-        legacy_cache_dir=legacy_tool_dir / INDEX_CACHE_DIRNAME,
-        legacy_metadata_path=legacy_tool_dir / METADATA_FILENAME,
-    )
+def normalize_session_name(raw: str) -> str:
+    candidate = re.sub(r"[^a-z0-9]+", "-", raw.strip().lower()).strip("-")
+    if not candidate:
+        return DEFAULT_SESSION_NAME
+    return SESSION_ALIAS_MAP.get(candidate, candidate)
 
 
-def migrate_legacy_layout(ctx: RepoContext) -> bool:
-    if ctx.tool_dir.exists() or not ctx.legacy_tool_dir.exists():
-        return False
-    shutil.move(str(ctx.legacy_tool_dir), str(ctx.tool_dir))
-    legacy_parent = ctx.legacy_tool_dir.parent
+def detect_session_from_command(command: str) -> str | None:
+    text = command.strip().lower()
+    if not text:
+        return None
     try:
-        legacy_parent.rmdir()
-    except OSError:
-        pass
-    return True
-
-
-def active_repo_context(cwd: Path | None = None) -> RepoContext:
-    ctx = detect_repo_context(cwd)
-    migrate_legacy_layout(ctx)
-    return ctx
-
-
-def resolve_cbm_runner() -> list[str]:
-    override = os.environ.get("CBM_CODEBASE_MEMORY_BIN")
-    if override:
-        return shlex.split(override)
-
-    binary = shutil.which("codebase-memory-mcp")
-    if binary:
-        return [binary]
-
-    uvx = shutil.which("uvx")
-    if uvx:
-        return [uvx, "codebase-memory-mcp"]
-
-    raise ToolError(
-        "codebase-memory-mcp not found. Install the binary or make `uvx` available."
-    )
+        argv0 = shlex.split(command)[0]
+    except ValueError:
+        argv0 = command.split()[0]
+    basename = Path(argv0).name.lower()
+    for candidate in (basename, text):
+        if "opencode" in candidate:
+            return "opencode"
+        if "claude" in candidate:
+            return "claudecode"
+        if "codex" in candidate:
+            return "codex"
+    return None
 
 
 def run_command(
@@ -177,6 +157,167 @@ def run_command(
         stderr = (proc.stderr or proc.stdout or "").strip()
         raise ToolError(f"command failed: {' '.join(cmd)}: {stderr}")
     return proc
+
+
+def iter_parent_commands(*, max_depth: int = 8) -> list[str]:
+    commands: list[str] = []
+    pid = os.getppid()
+    for _ in range(max_depth):
+        proc = run_command(
+            ["ps", "-o", "pid=,ppid=,command=", "-p", str(pid)],
+            check=False,
+        )
+        line = proc.stdout.strip()
+        if proc.returncode != 0 or not line:
+            break
+        parts = line.split(None, 2)
+        if len(parts) < 3:
+            break
+        commands.append(parts[2].strip())
+        try:
+            next_pid = int(parts[1])
+        except ValueError:
+            break
+        if next_pid <= 1 or next_pid == pid:
+            break
+        pid = next_pid
+    return commands
+
+
+def resolve_session_context(session_override: str | None = None) -> tuple[str, str]:
+    if session_override:
+        return normalize_session_name(session_override), "flag"
+    for env_name in SESSION_OVERRIDE_ENV_VARS:
+        value = os.environ.get(env_name)
+        if value:
+            return normalize_session_name(value), f"env:{env_name}"
+    for command in iter_parent_commands():
+        detected = detect_session_from_command(command)
+        if detected:
+            return detected, f"process:{detected}"
+    return DEFAULT_SESSION_NAME, "default"
+
+
+def detect_repo_context(
+    cwd: Path | None = None,
+    *,
+    session: str | None = None,
+) -> RepoContext:
+    repo_root = Path(git_output(["rev-parse", "--show-toplevel"], cwd=cwd)).resolve()
+    session_name, session_source = resolve_session_context(session)
+    root_dir = repo_root / INDEX_ROOT_DIRNAME
+    session_dir = root_dir / session_name
+    cache_dir = session_dir / INDEX_CACHE_DIRNAME
+    return RepoContext(
+        repo_root=repo_root,
+        root_dir=root_dir,
+        session_name=session_name,
+        session_source=session_source,
+        session_dir=session_dir,
+        cache_dir=cache_dir,
+        metadata_path=session_dir / METADATA_FILENAME,
+    )
+
+
+def repo_context_from_args(args: argparse.Namespace) -> RepoContext:
+    return detect_repo_context(session=getattr(args, "session", None))
+
+
+def default_cbm_binary_path() -> Path:
+    binary_name = "codebase-memory-mcp.exe" if platform.system() == "Windows" else "codebase-memory-mcp"
+    return Path.home() / ".local" / "bin" / binary_name
+
+
+def normalize_platform_name(name: str) -> str | None:
+    lowered = name.strip().lower()
+    if lowered.startswith("darwin"):
+        return "darwin"
+    if lowered.startswith("linux"):
+        return "linux"
+    if lowered.startswith("windows") or lowered.startswith("mingw") or lowered.startswith("msys"):
+        return "windows"
+    return None
+
+
+def normalize_arch_name(name: str) -> str | None:
+    lowered = name.strip().lower()
+    if lowered in {"arm64", "aarch64"}:
+        return "arm64"
+    if lowered in {"x86_64", "amd64"}:
+        return "amd64"
+    return None
+
+
+def current_platform_slug() -> str | None:
+    os_name = normalize_platform_name(platform.system())
+    arch_name = normalize_arch_name(platform.machine())
+    if not os_name or not arch_name:
+        return None
+    return f"{os_name}-{arch_name}"
+
+
+def install_runtime_hint() -> str:
+    script_path = REPO_ROOT_DIR / "scripts" / "install.sh"
+    return (
+        "Install it first with "
+        f"`codebase install-runtime` or `bash {script_path}`."
+    )
+
+
+def read_binary_version(binary_path: Path) -> str:
+    proc = run_command([str(binary_path), "--version"], check=False)
+    version = (proc.stdout or proc.stderr or "").strip()
+    if proc.returncode != 0 or not version:
+        raise ToolError(f"installed binary failed to run: {binary_path}")
+    return version
+
+
+def install_runtime_binary(*, force: bool = False) -> dict[str, Any]:
+    local_binary = default_cbm_binary_path()
+    if local_binary.exists() and not force:
+        return {
+            "status": "already_installed",
+            "binary_path": str(local_binary),
+            "version": read_binary_version(local_binary),
+        }
+    if not shutil.which("curl"):
+        raise ToolError("curl not found. Install curl and rerun `codebase install-runtime`.")
+
+    install_dir = local_binary.parent
+    install_dir.mkdir(parents=True, exist_ok=True)
+    install_cmd = (
+        f"curl -fsSL {shlex.quote(CBM_INSTALL_URL)}"
+        f" | bash -s -- --skip-config --dir={shlex.quote(str(install_dir))}"
+    )
+    proc = run_command(["bash", "-lc", install_cmd], check=False)
+    if proc.returncode != 0:
+        stderr = (proc.stderr or proc.stdout or "").strip()
+        raise ToolError(f"install-runtime failed: {stderr or 'unknown error'}")
+    if not local_binary.exists():
+        raise ToolError(f"install-runtime finished but binary is missing: {local_binary}")
+    return {
+        "status": "installed",
+        "binary_path": str(local_binary),
+        "version": read_binary_version(local_binary),
+    }
+
+
+def resolve_cbm_runner() -> list[str]:
+    override = os.environ.get("CBM_CODEBASE_MEMORY_BIN")
+    if override:
+        return shlex.split(override)
+
+    binary = shutil.which("codebase-memory-mcp")
+    if binary:
+        return [binary]
+
+    local_binary = default_cbm_binary_path()
+    if local_binary.exists():
+        return [str(local_binary)]
+
+    raise ToolError(
+        f"codebase-memory-mcp not found. {install_runtime_hint()}"
+    )
 
 
 def parse_outer_json(output: str) -> dict[str, Any]:
@@ -314,13 +455,16 @@ def resolve_index_mode(ctx: RepoContext, override_mode: str | None = None) -> st
 
 
 def write_metadata(ctx: RepoContext, *, mode: str, project_name: str) -> None:
-    ctx.tool_dir.mkdir(parents=True, exist_ok=True)
+    ctx.session_dir.mkdir(parents=True, exist_ok=True)
     payload = {
-        "version": 1,
+        "version": 2,
         "indexed_at": utc_now(),
         "mode": mode,
         "tool_version": VERSION,
         "repo_root": str(ctx.repo_root),
+        "root_dir": str(ctx.root_dir),
+        "session_name": ctx.session_name,
+        "session_dir": str(ctx.session_dir),
         "cache_dir": str(ctx.cache_dir),
         "project_name": project_name,
         "head_commit": git_head_commit(ctx.repo_root),
@@ -333,10 +477,8 @@ def write_metadata(ctx: RepoContext, *, mode: str, project_name: str) -> None:
 
 
 def perform_index(ctx: RepoContext, *, mode: str, clean: bool = False) -> dict[str, Any]:
-    if clean:
-        for path in [ctx.tool_dir, ctx.legacy_tool_dir]:
-            if path.exists():
-                shutil.rmtree(path)
+    if clean and ctx.session_dir.exists():
+        shutil.rmtree(ctx.session_dir)
     ctx.cache_dir.mkdir(parents=True, exist_ok=True)
 
     run_cbm_tool(
@@ -348,7 +490,9 @@ def perform_index(ctx: RepoContext, *, mode: str, clean: bool = False) -> dict[s
     write_metadata(ctx, mode=mode, project_name=project_name)
     return {
         "repo_root": str(ctx.repo_root),
-        "tool_dir": str(ctx.tool_dir),
+        "root_dir": str(ctx.root_dir),
+        "session_name": ctx.session_name,
+        "session_dir": str(ctx.session_dir),
         "cache_dir": str(ctx.cache_dir),
         "project_name": project_name,
         "db_files": [path.name for path in indexed_db_files(ctx)],
@@ -594,10 +738,13 @@ def print_json(data: Any) -> None:
 
 
 def command_status(args: argparse.Namespace) -> int:
-    ctx = active_repo_context()
+    ctx = repo_context_from_args(args)
     payload: dict[str, Any] = {
         "repo_root": str(ctx.repo_root),
-        "tool_dir": str(ctx.tool_dir),
+        "root_dir": str(ctx.root_dir),
+        "session_name": ctx.session_name,
+        "session_source": ctx.session_source,
+        "session_dir": str(ctx.session_dir),
         "cache_dir": str(ctx.cache_dir),
         "db_files": [path.name for path in indexed_db_files(ctx)],
         "head_commit": git_head_commit(ctx.repo_root),
@@ -620,7 +767,9 @@ def command_status(args: argparse.Namespace) -> int:
         print_json(payload)
     else:
         print(f"Repo root: {ctx.repo_root}")
-        print(f"Tool dir: {ctx.tool_dir}")
+        print(f"Root dir: {ctx.root_dir}")
+        print(f"Session: {ctx.session_name} ({ctx.session_source})")
+        print(f"Session dir: {ctx.session_dir}")
         print(f"Cache dir: {ctx.cache_dir}")
         print(f"DB files: {', '.join(payload['db_files']) or 'none'}")
         if payload.get("project_name"):
@@ -638,12 +787,13 @@ def command_status(args: argparse.Namespace) -> int:
 
 
 def command_index(args: argparse.Namespace) -> int:
-    ctx = active_repo_context()
+    ctx = repo_context_from_args(args)
     payload = perform_index(ctx, mode=args.mode, clean=args.clean)
     if args.json:
         print_json(payload)
     else:
         print(f"Indexed: {ctx.repo_root}")
+        print(f"Session: {ctx.session_name}")
         print(f"Mode: {args.mode}")
         print(f"Project name: {payload['project_name']}")
         print(f"Cache dir: {ctx.cache_dir}")
@@ -651,7 +801,7 @@ def command_index(args: argparse.Namespace) -> int:
 
 
 def command_projects(args: argparse.Namespace) -> int:
-    ctx = active_repo_context()
+    ctx = repo_context_from_args(args)
     projects = list_projects(ctx)
     if args.json:
         print_json({"projects": projects})
@@ -661,7 +811,7 @@ def command_projects(args: argparse.Namespace) -> int:
 
 
 def command_refresh(args: argparse.Namespace) -> int:
-    ctx = active_repo_context()
+    ctx = repo_context_from_args(args)
     metadata = load_metadata(ctx)
     mode = resolve_index_mode(ctx, args.mode)
     reason = "forced" if args.force else determine_refresh_reason(
@@ -685,6 +835,7 @@ def command_refresh(args: argparse.Namespace) -> int:
             print("Index is already up to date.")
             if payload["project_name"]:
                 print(f"Project name: {payload['project_name']}")
+            print(f"Session: {ctx.session_name}")
             print(f"Mode: {mode}")
         return 0
 
@@ -694,6 +845,7 @@ def command_refresh(args: argparse.Namespace) -> int:
         print_json(payload)
     else:
         print(f"Refreshed index: {ctx.repo_root}")
+        print(f"Session: {ctx.session_name}")
         print(f"Reason: {reason}")
         print(f"Mode: {mode}")
         print(f"Project name: {payload['project_name']}")
@@ -701,24 +853,33 @@ def command_refresh(args: argparse.Namespace) -> int:
 
 
 def command_reset(args: argparse.Namespace) -> int:
-    ctx = active_repo_context()
+    ctx = repo_context_from_args(args)
     if ctx.cache_dir.exists():
         try:
             project_name = resolve_project_name(ctx)
             run_cbm_tool(ctx, "delete_project", {"project": project_name})
         except ToolError:
             pass
-    for path in [ctx.tool_dir, ctx.legacy_tool_dir]:
-        if path.exists():
-            shutil.rmtree(path)
+    if ctx.session_dir.exists():
+        shutil.rmtree(ctx.session_dir)
+    if ctx.root_dir.exists() and not any(ctx.root_dir.iterdir()):
+        ctx.root_dir.rmdir()
     if args.json:
-        print_json({"status": "deleted", "tool_dir": str(ctx.tool_dir)})
+        print_json(
+            {
+                "status": "deleted",
+                "root_dir": str(ctx.root_dir),
+                "session_name": ctx.session_name,
+                "session_dir": str(ctx.session_dir),
+            }
+        )
     else:
-        print(f"Deleted local index: {ctx.tool_dir}")
+        print(f"Deleted local index: {ctx.session_dir}")
     return 0
 
 
 def command_self_check(args: argparse.Namespace) -> int:
+    session_name, session_source = resolve_session_context(getattr(args, "session", None))
     payload: dict[str, Any] = {
         "tool_name": APP_NAME,
         "tool_version": VERSION,
@@ -727,6 +888,13 @@ def command_self_check(args: argparse.Namespace) -> int:
         "git_in_path": bool(shutil.which("git")),
         "python3_in_path": bool(shutil.which("python3")),
         "codebase_command_in_path": bool(shutil.which("codebase")),
+        "session_name": session_name,
+        "session_source": session_source,
+        "local_binary_path": str(default_cbm_binary_path()),
+        "local_binary_exists": default_cbm_binary_path().exists(),
+        "platform_slug": current_platform_slug(),
+        "install_runtime_hint": install_runtime_hint(),
+        "uvx_in_path": bool(shutil.which("uvx")),
     }
     try:
         payload["cbm_runner"] = resolve_cbm_runner()
@@ -734,9 +902,11 @@ def command_self_check(args: argparse.Namespace) -> int:
         payload["cbm_runner_error"] = str(exc)
 
     try:
-        ctx = active_repo_context()
+        ctx = repo_context_from_args(args)
         payload["inside_git_repo"] = True
         payload["repo_root"] = str(ctx.repo_root)
+        payload["root_dir"] = str(ctx.root_dir)
+        payload["session_dir"] = str(ctx.session_dir)
         payload["repo_dirty"] = repo_has_non_tool_changes(ctx.repo_root)
         payload["head_commit"] = git_head_commit(ctx.repo_root)
         payload["index_exists"] = bool(indexed_db_files(ctx))
@@ -755,8 +925,19 @@ def command_self_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def command_install_runtime(args: argparse.Namespace) -> int:
+    payload = install_runtime_binary(force=args.force)
+    if args.json:
+        print_json(payload)
+    else:
+        print(f"Status: {payload['status']}")
+        print(f"Binary: {payload['binary_path']}")
+        print(f"Version: {payload['version']}")
+    return 0
+
+
 def command_func(args: argparse.Namespace) -> int:
-    ctx = active_repo_context()
+    ctx = repo_context_from_args(args)
     project_name = ensure_project_name(ctx)
     search = search_functions(ctx, project_name, args.keyword, use_regex=args.regex)
     results = search.get("results", [])
@@ -774,7 +955,7 @@ def command_func(args: argparse.Namespace) -> int:
 
 
 def command_calls(args: argparse.Namespace) -> int:
-    ctx = active_repo_context()
+    ctx = repo_context_from_args(args)
     project_name = ensure_project_name(ctx)
     symbol = resolve_symbol(
         ctx,
@@ -798,7 +979,7 @@ def command_calls(args: argparse.Namespace) -> int:
 
 
 def command_snippet(args: argparse.Namespace) -> int:
-    ctx = active_repo_context()
+    ctx = repo_context_from_args(args)
     project_name = ensure_project_name(ctx)
     symbol = resolve_symbol(
         ctx,
@@ -820,7 +1001,7 @@ def command_snippet(args: argparse.Namespace) -> int:
 
 
 def command_search_graph(args: argparse.Namespace) -> int:
-    ctx = active_repo_context()
+    ctx = repo_context_from_args(args)
     project_name = ensure_project_name(ctx)
     payload: dict[str, Any] = {"project": project_name}
     if args.term:
@@ -842,7 +1023,7 @@ def command_search_graph(args: argparse.Namespace) -> int:
 
 
 def command_trace_path(args: argparse.Namespace) -> int:
-    ctx = active_repo_context()
+    ctx = repo_context_from_args(args)
     project_name = ensure_project_name(ctx)
     payload: dict[str, Any] = {
         "project": project_name,
@@ -860,7 +1041,7 @@ def command_trace_path(args: argparse.Namespace) -> int:
 
 
 def command_search_code(args: argparse.Namespace) -> int:
-    ctx = active_repo_context()
+    ctx = repo_context_from_args(args)
     project_name = ensure_project_name(ctx)
     payload: dict[str, Any] = {
         "project": project_name,
@@ -886,7 +1067,7 @@ def command_search_code(args: argparse.Namespace) -> int:
 
 
 def command_query_graph(args: argparse.Namespace) -> int:
-    ctx = active_repo_context()
+    ctx = repo_context_from_args(args)
     project_name = ensure_project_name(ctx)
     payload: dict[str, Any] = {"project": project_name, "query": args.query}
     if args.max_rows is not None:
@@ -900,7 +1081,7 @@ def command_query_graph(args: argparse.Namespace) -> int:
 
 
 def command_detect_changes(args: argparse.Namespace) -> int:
-    ctx = active_repo_context()
+    ctx = repo_context_from_args(args)
     project_name = ensure_project_name(ctx)
     payload: dict[str, Any] = {
         "project": project_name,
@@ -919,7 +1100,7 @@ def command_detect_changes(args: argparse.Namespace) -> int:
 
 
 def command_architecture(args: argparse.Namespace) -> int:
-    ctx = active_repo_context()
+    ctx = repo_context_from_args(args)
     project_name = ensure_project_name(ctx)
     payload = {
         "project": project_name,
@@ -931,7 +1112,7 @@ def command_architecture(args: argparse.Namespace) -> int:
 
 
 def command_schema(args: argparse.Namespace) -> int:
-    ctx = active_repo_context()
+    ctx = repo_context_from_args(args)
     project_name = ensure_project_name(ctx)
     response = run_cbm_tool(ctx, "get_graph_schema", {"project": project_name})
     print_json(response)
@@ -939,7 +1120,7 @@ def command_schema(args: argparse.Namespace) -> int:
 
 
 def command_index_status(args: argparse.Namespace) -> int:
-    ctx = active_repo_context()
+    ctx = repo_context_from_args(args)
     project_name = ensure_project_name(ctx)
     response = run_cbm_tool(ctx, "index_status", {"project": project_name})
     if args.json:
@@ -955,7 +1136,7 @@ def command_index_status(args: argparse.Namespace) -> int:
 
 
 def command_adr(args: argparse.Namespace) -> int:
-    ctx = active_repo_context()
+    ctx = repo_context_from_args(args)
     project_name = ensure_project_name(ctx)
     payload: dict[str, Any] = {"project": project_name, "mode": args.mode}
     if args.mode == "update":
@@ -974,7 +1155,7 @@ def command_adr(args: argparse.Namespace) -> int:
 
 
 def command_ingest_traces(args: argparse.Namespace) -> int:
-    ctx = active_repo_context()
+    ctx = repo_context_from_args(args)
     project_name = ensure_project_name(ctx)
     trace_path = Path(args.file)
     raw = json.loads(trace_path.read_text(encoding="utf-8"))
@@ -1001,11 +1182,12 @@ def build_parser() -> argparse.ArgumentParser:
         epilog=textwrap.dedent(
             """\
             Commands:
-              status                Show local index state under .codebase
+              install-runtime       Install codebase-memory-mcp into ~/.local/bin
+              status                Show local index state under .codebase/<session>
               index                 Build or rebuild the local index
               refresh               Rebuild only when the repo or mode changed
               projects              List indexed projects in current local cache
-              reset                 Delete the local .codebase index
+              reset                 Delete the local .codebase/<session> index
               self-check            Verify environment, repo, and tool wiring
               func <keyword>        Search functions and methods
               calls <symbol>        Show callers/callees for one resolved symbol
@@ -1024,20 +1206,32 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
+    parser.add_argument(
+        "--session",
+        help="override the session namespace; default auto-detects codex, claudecode, or opencode",
+    )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    status = subparsers.add_parser("status", help="show local index status")
+    install_runtime = subparsers.add_parser(
+        "install-runtime",
+        help="install codebase-memory-mcp into ~/.local/bin",
+    )
+    install_runtime.add_argument("--force", action="store_true", help="reinstall even if already present")
+    install_runtime.add_argument("--json", action="store_true", help="print JSON")
+    install_runtime.set_defaults(func=command_install_runtime)
+
+    status = subparsers.add_parser("status", help="show local index status for the current session")
     status.add_argument("--json", action="store_true", help="print JSON")
     status.set_defaults(func=command_status)
 
-    index = subparsers.add_parser("index", help="build the local index under .codebase")
+    index = subparsers.add_parser("index", help="build the local index under .codebase/<session>")
     index.add_argument(
         "--mode",
         choices=["full", "moderate", "fast"],
         default="full",
         help="indexing depth",
     )
-    index.add_argument("--clean", action="store_true", help="remove existing .codebase before indexing")
+    index.add_argument("--clean", action="store_true", help="remove existing .codebase/<session> before indexing")
     index.add_argument("--json", action="store_true", help="print JSON")
     index.set_defaults(func=command_index)
 
@@ -1048,7 +1242,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="override index mode; if omitted, reuse metadata mode or default to full",
     )
     refresh.add_argument("--force", action="store_true", help="refresh even if already up to date")
-    refresh.add_argument("--clean", action="store_true", help="remove existing .codebase before refreshing")
+    refresh.add_argument("--clean", action="store_true", help="remove existing .codebase/<session> before refreshing")
     refresh.add_argument("--json", action="store_true", help="print JSON")
     refresh.set_defaults(func=command_refresh)
 
@@ -1056,7 +1250,7 @@ def build_parser() -> argparse.ArgumentParser:
     projects.add_argument("--json", action="store_true", help="print JSON")
     projects.set_defaults(func=command_projects)
 
-    reset = subparsers.add_parser("reset", help="delete local .codebase index")
+    reset = subparsers.add_parser("reset", help="delete the local .codebase/<session> index")
     reset.add_argument("--json", action="store_true", help="print JSON")
     reset.set_defaults(func=command_reset)
 

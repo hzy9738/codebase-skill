@@ -14,7 +14,7 @@ Quick links: [Install](#install) · [Quick start](#quick-start) · [Codex skill 
 
 | Area | Decision |
 | --- | --- |
-| Index storage | Repository-local `.codebase/` |
+| Index storage | Repository-local `.codebase/<session>/` |
 | Runtime model | Local CLI, no MCP protocol at runtime |
 | Upstream engine | `DeusData/codebase-memory-mcp` |
 | Primary interface | `codebase` shell command |
@@ -23,7 +23,7 @@ Quick links: [Install](#install) · [Quick start](#quick-start) · [Codex skill 
 
 ## What you get
 
-- Repository-local index storage under `.codebase/`
+- Repository-local index storage under `.codebase/<session>/`
 - A normal shell command: `codebase`
 - Optional Codex skill install under `~/.cc-switch/skills/codebase`
 - Better defaults for agent workflows: `func`, `calls`, `snippet`, `search-code`, `detect-changes`, `refresh`
@@ -85,7 +85,7 @@ The installer:
 - installs this package with `python3 -m pip install --user`
 - retries with `--break-system-packages` on PEP 668 style Python environments when needed
 - keeps the executable at `~/.local/bin/codebase`
-- installs upstream `codebase-memory-mcp` only when neither `codebase-memory-mcp` nor `uvx` is available
+- installs upstream `codebase-memory-mcp` when possible during setup
 
 If you want the optional Codex skill as well:
 
@@ -121,11 +121,16 @@ codebase --version
 
 ```text
 <repo>/.codebase/
-  index/*.db
-  metadata.json
+  codex/
+    index/*.db
+    metadata.json
+  claudecode/
+    index/*.db
+    metadata.json
+  opencode/
+    index/*.db
+    metadata.json
 ```
-
-If an older `.codex/cbm/` layout exists and `.codebase/` does not, the CLI migrates that local index to `.codebase/` on first use.
 
 If you do not want `.codebase/` to appear in `git status`, add a local-only exclude:
 
@@ -140,6 +145,13 @@ Typical workflow:
 3. Use `codebase calls` and `codebase snippet` after symbol resolution.
 4. Use `codebase search-code` for text-oriented retrieval.
 5. Use `codebase refresh` instead of repeated full re-indexes.
+
+Session behavior:
+
+- Index data is isolated per session under `<repo>/.codebase/<session>/`.
+- Session names auto-detect to `codex`, `claudecode`, or `opencode` when possible.
+- Use `codebase --session <name> ...` or `CODEBASE_SESSION=<name>` to override.
+- There is no automatic runtime download on first use. Install the upstream binary explicitly with `codebase install-runtime` if it is missing.
 
 ## Codex skill integration
 
@@ -170,11 +182,12 @@ For Claude Code, OpenCode, Copilot, or other tools that can run shell commands, 
 ## Commands
 
 - `status`: show repository, cache, metadata, and index state
+- `install-runtime`: explicitly install `codebase-memory-mcp` into `~/.local/bin`
 - `index`: build or rebuild the local index
 - `refresh`: rebuild only when the repo or index mode changed
 - `projects`: list indexed projects in the current local cache
 - `reset`: delete `.codebase`
-- `self-check`: verify PATH, dependencies, repo detection, and index wiring
+- `self-check`: verify PATH, dependencies, session detection, repo detection, and index wiring
 - `func`: search indexed functions and methods
 - `calls`: show callers and callees for a resolved symbol
 - `snippet`: print the source snippet for a symbol
@@ -188,6 +201,12 @@ For Claude Code, OpenCode, Copilot, or other tools that can run shell commands, 
 - `index-status`: show upstream index status
 - `adr`: get or update ADR content through upstream `manage_adr`
 - `ingest-traces`: forward runtime traces to upstream `ingest_traces`
+
+Runtime resolution order:
+
+1. `CBM_CODEBASE_MEMORY_BIN`
+2. `codebase-memory-mcp` from `PATH`
+3. `~/.local/bin/codebase-memory-mcp`
 
 ## Development
 

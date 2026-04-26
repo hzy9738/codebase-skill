@@ -17,7 +17,7 @@ Usage: bash scripts/install.sh [options]
 Options:
   --install-skill           Install the Codex skill stub under ~/.cc-switch/skills/codebase
   --skill-home <path>       Override the skill home directory
-  --skip-upstream-install   Do not auto-install codebase-memory-mcp
+  --skip-upstream-install   Do not install codebase-memory-mcp during setup
   --python <path>           Python executable to use
   --help                    Show this help message
 EOF
@@ -101,14 +101,19 @@ if ! pip_install_repo; then
 fi
 
 if [[ "${INSTALL_UPSTREAM}" == "1" ]] && \
-   ! command -v codebase-memory-mcp >/dev/null 2>&1 && \
-   ! command -v uvx >/dev/null 2>&1; then
+   ! command -v codebase-memory-mcp >/dev/null 2>&1; then
   if ! command -v curl >/dev/null 2>&1; then
-    echo "curl is required to install codebase-memory-mcp automatically" >&2
-    exit 1
+    echo "Skipping codebase-memory-mcp install because curl is unavailable." >&2
+    echo "Run \`codebase install-runtime\` later after curl/proxy is ready." >&2
+  else
+    curl -fsSL https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh | \
+      bash -s -- --skip-config --dir="${LOCAL_BIN_DIR}"
   fi
-  curl -fsSL https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh | \
-    bash -s -- --skip-config --dir="${LOCAL_BIN_DIR}"
+fi
+
+if ! command -v codebase-memory-mcp >/dev/null 2>&1 && [ ! -x "${LOCAL_BIN_DIR}/codebase-memory-mcp" ]; then
+  echo "Warning: codebase-memory-mcp is still not installed."
+  echo "Run \`codebase install-runtime\` or rerun this script after network/proxy is ready."
 fi
 
 if [[ "${INSTALL_SKILL}" == "1" ]]; then

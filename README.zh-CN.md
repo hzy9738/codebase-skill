@@ -14,7 +14,7 @@
 
 | 项目 | 方案 |
 | --- | --- |
-| 索引存储位置 | 仓库内的 `.codebase/` |
+| 索引存储位置 | 仓库内的 `.codebase/<session>/` |
 | 运行时模型 | 本地 CLI，不走 MCP 协议 |
 | 底层引擎 | `DeusData/codebase-memory-mcp` |
 | 主入口 | `codebase` 命令 |
@@ -23,7 +23,7 @@
 
 ## 你能得到什么
 
-- 仓库级本地索引，数据放在 `.codebase/`
+- 仓库级本地索引，数据放在 `.codebase/<session>/`
 - 一个普通 shell 命令：`codebase`
 - 可选的 Codex skill 安装
 - 更适合 agent 工作流的默认命令：`func`、`calls`、`snippet`、`search-code`、`detect-changes`、`refresh`
@@ -85,7 +85,7 @@ bash scripts/install.sh
 - 使用 `python3 -m pip install --user` 安装当前包
 - 在遇到 PEP 668 风格环境时自动尝试 `--break-system-packages`
 - 把可执行命令安装到 `~/.local/bin/codebase`
-- 只有在 `codebase-memory-mcp` 和 `uvx` 都不存在时，才自动安装上游工具
+- 在安装阶段尽量把 `codebase-memory-mcp` 一起装好
 
 如果还想同时安装可选的 Codex skill：
 
@@ -121,11 +121,16 @@ codebase --version
 
 ```text
 <repo>/.codebase/
-  index/*.db
-  metadata.json
+  codex/
+    index/*.db
+    metadata.json
+  claudecode/
+    index/*.db
+    metadata.json
+  opencode/
+    index/*.db
+    metadata.json
 ```
-
-如果仓库里只有旧的 `.codex/cbm/`，还没有 `.codebase/`，CLI 会在首次使用时自动迁移到 `.codebase/`。
 
 如果你不想让 `.codebase/` 出现在 `git status` 里，可以加到本地排除：
 
@@ -140,6 +145,13 @@ printf '\n.codebase/\n' >> .git/info/exclude
 3. 用 `codebase calls` 和 `codebase snippet` 看调用关系和源码。
 4. 用 `codebase search-code` 做偏文本的检索。
 5. 日常更新时优先用 `codebase refresh`，不要反复全量重建。
+
+会话行为：
+
+- 索引按 session 隔离，路径是 `<repo>/.codebase/<session>/`。
+- 当前会尽量自动识别成 `codex`、`claudecode`、`opencode`。
+- 也可以手动用 `codebase --session <name> ...` 或 `CODEBASE_SESSION=<name>` 覆盖。
+- 首次正常使用时不会自动联网下载运行时；如果缺少 `codebase-memory-mcp`，请显式执行 `codebase install-runtime`。
 
 ## Codex skill 集成
 
@@ -170,11 +182,12 @@ bash scripts/install.sh --install-skill
 ## 命令列表
 
 - `status`：查看仓库、缓存、元数据和索引状态
+- `install-runtime`：显式把 `codebase-memory-mcp` 安装到 `~/.local/bin`
 - `index`：构建或重建本地索引
 - `refresh`：仅在仓库状态或索引模式变化时重建
 - `projects`：列出当前本地缓存里的索引项目
 - `reset`：删除 `.codebase`
-- `self-check`：检查 PATH、依赖、仓库识别和工具连通性
+- `self-check`：检查 PATH、依赖、session 识别、仓库识别和工具连通性
 - `func`：搜索已索引的函数和方法
 - `calls`：查看某个符号的调用方和被调用方
 - `snippet`：打印某个符号对应的源码片段
@@ -188,6 +201,12 @@ bash scripts/install.sh --install-skill
 - `index-status`：查看上游索引状态
 - `adr`：通过上游 `manage_adr` 获取或更新 ADR
 - `ingest-traces`：通过上游 `ingest_traces` 注入运行时 trace
+
+运行时查找顺序：
+
+1. `CBM_CODEBASE_MEMORY_BIN`
+2. `PATH` 里的 `codebase-memory-mcp`
+3. `~/.local/bin/codebase-memory-mcp`
 
 ## 开发
 
