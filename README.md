@@ -18,14 +18,14 @@ Quick links: [Install](#install) · [Quick start](#quick-start) · [Codex skill 
 | Runtime model | Local CLI, no MCP protocol at runtime |
 | Upstream engine | `DeusData/codebase-memory-mcp` |
 | Primary interface | `codebase` shell command |
-| Agent integration | Optional `~/.cc-switch/skills/codebase/SKILL.md` |
+| Agent integration | Optional `~/.codex/skills/codebase/SKILL.md` |
 | Target workflow | Codex, Claude Code, OpenCode, Copilot, local CLI |
 
 ## What you get
 
 - Repository-local index storage under `.codebase/<session>/`
 - A normal shell command: `codebase`
-- Optional Codex skill install under `~/.cc-switch/skills/codebase`
+- Optional Codex skill install under `~/.codex/skills/codebase`
 - Better defaults for agent workflows: `func`, `calls`, `snippet`, `search-code`, `detect-changes`, `refresh`
 - No GitHub artifact flow and no runtime MCP server requirement
 
@@ -166,7 +166,7 @@ bash scripts/install.sh --install-skill
 That writes:
 
 ```text
-~/.cc-switch/skills/codebase/SKILL.md
+~/.codex/skills/codebase/SKILL.md
 ```
 
 Recommended `AGENTS.md` rule:

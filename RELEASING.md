@@ -48,7 +48,7 @@ codebase-skill is a CLI-first local wrapper around codebase-memory-mcp with opti
 Highlights:
 - repository-local index storage under .codebase/
 - global codebase command with refresh, search, call graph, and snippet workflows
-- optional ~/.cc-switch/skills/codebase installation for Codex users, direct CLI use for other agent tools
+- optional ~/.codex/skills/codebase installation for Codex users, direct CLI use for other agent tools
 - macOS and Ubuntu 24 friendly install path
 
 This release targets agent-heavy repository retrieval without runtime MCP protocol overhead.

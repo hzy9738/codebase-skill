@@ -18,7 +18,7 @@
 | 运行时模型 | 本地 CLI，不走 MCP 协议 |
 | 底层引擎 | `DeusData/codebase-memory-mcp` |
 | 主入口 | `codebase` 命令 |
-| Agent 集成 | 可选安装到 `~/.cc-switch/skills/codebase/SKILL.md` |
+| Agent 集成 | 可选安装到 `~/.codex/skills/codebase/SKILL.md` |
 | 目标场景 | Codex、Claude Code、OpenCode、Copilot、本地 CLI |
 
 ## 你能得到什么
@@ -166,7 +166,7 @@ bash scripts/install.sh --install-skill
 它会写入：
 
 ```text
-~/.cc-switch/skills/codebase/SKILL.md
+~/.codex/skills/codebase/SKILL.md
 ```
 
 推荐写进项目 `AGENTS.md` 的规则：

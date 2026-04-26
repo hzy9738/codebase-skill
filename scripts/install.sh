@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOCAL_BIN_DIR="${HOME}/.local/bin"
-SKILL_HOME_DEFAULT="${HOME}/.cc-switch/skills"
+SKILL_HOME_DEFAULT="${HOME}/.codex/skills"
 SKILL_NAME="codebase"
 INSTALL_SKILL=0
 INSTALL_UPSTREAM=1
@@ -15,7 +15,7 @@ usage() {
 Usage: bash scripts/install.sh [options]
 
 Options:
-  --install-skill           Install the Codex skill stub under ~/.cc-switch/skills/codebase
+  --install-skill           Install the Codex skill stub under ~/.codex/skills/codebase
   --skill-home <path>       Override the skill home directory
   --skip-upstream-install   Do not install codebase-memory-mcp during setup
   --python <path>           Python executable to use
