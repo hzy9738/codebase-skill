@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import textwrap
+import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -18,21 +19,16 @@ from typing import Any
 
 
 APP_NAME = "codebase"
-VERSION = "0.4.2"
+VERSION = "0.5.0"
 INDEX_ROOT_DIRNAME = ".codebase"
 INDEX_CACHE_DIRNAME = "index"
 METADATA_FILENAME = "metadata.json"
 FUNCTION_LABELS = {"Function", "Method"}
-DEFAULT_SESSION_NAME = "default"
 SESSION_OVERRIDE_ENV_VARS = ("CODEBASE_SESSION", "CBM_SESSION")
-SESSION_ALIAS_MAP = {
-    "claude": "claudecode",
-    "claude-code": "claudecode",
-    "claudecode": "claudecode",
-    "codex": "codex",
-    "open-code": "opencode",
-    "opencode": "opencode",
-}
+UUID_PATTERN = re.compile(
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+    re.IGNORECASE,
+)
 CBM_INSTALL_URL = "https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh"
 REPO_ROOT_DIR = Path(__file__).resolve().parents[2]
 
@@ -56,89 +52,6 @@ def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
 
 
-def git_output(args: list[str], cwd: Path | None = None) -> str:
-    proc = subprocess.run(
-        ["git", *args],
-        cwd=str(cwd) if cwd else None,
-        capture_output=True,
-        text=True,
-    )
-    if proc.returncode != 0:
-        stderr = (proc.stderr or proc.stdout or "").strip()
-        raise ToolError(f"git {' '.join(args)} failed: {stderr}")
-    return proc.stdout.strip()
-
-
-def git_head_commit(cwd: Path | None = None) -> str:
-    proc = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
-        cwd=str(cwd) if cwd else None,
-        capture_output=True,
-        text=True,
-    )
-    if proc.returncode != 0:
-        return ""
-    return proc.stdout.strip()
-
-
-def parse_status_path(line: str) -> str:
-    path = line[3:].strip() if len(line) >= 4 else line.strip()
-    if " -> " in path:
-        path = path.split(" -> ", 1)[1].strip()
-    return path
-
-
-def is_tool_work_path(path: str) -> bool:
-    normalized = path.strip()
-    if normalized.startswith("./"):
-        normalized = normalized[2:]
-    return normalized == INDEX_ROOT_DIRNAME or normalized.startswith(f"{INDEX_ROOT_DIRNAME}/")
-
-
-def repo_has_non_tool_changes(cwd: Path | None = None) -> bool:
-    proc = subprocess.run(
-        ["git", "status", "--porcelain", "--untracked-files=all"],
-        cwd=str(cwd) if cwd else None,
-        capture_output=True,
-        text=True,
-    )
-    if proc.returncode != 0:
-        return False
-    for raw_line in proc.stdout.splitlines():
-        if not raw_line.strip():
-            continue
-        if is_tool_work_path(parse_status_path(raw_line)):
-            continue
-        return True
-    return False
-
-
-def normalize_session_name(raw: str) -> str:
-    candidate = re.sub(r"[^a-z0-9]+", "-", raw.strip().lower()).strip("-")
-    if not candidate:
-        return DEFAULT_SESSION_NAME
-    return SESSION_ALIAS_MAP.get(candidate, candidate)
-
-
-def detect_session_from_command(command: str) -> str | None:
-    text = command.strip().lower()
-    if not text:
-        return None
-    try:
-        argv0 = shlex.split(command)[0]
-    except ValueError:
-        argv0 = command.split()[0]
-    basename = Path(argv0).name.lower()
-    for candidate in (basename, text):
-        if "opencode" in candidate:
-            return "opencode"
-        if "claude" in candidate:
-            return "claudecode"
-        if "codex" in candidate:
-            return "codex"
-    return None
-
-
 def run_command(
     cmd: list[str],
     *,
@@ -159,8 +72,8 @@ def run_command(
     return proc
 
 
-def iter_parent_commands(*, max_depth: int = 8) -> list[str]:
-    commands: list[str] = []
+def iter_parent_processes(*, max_depth: int = 15) -> list[tuple[int, str]]:
+    results: list[tuple[int, str]] = []
     pid = os.getppid()
     for _ in range(max_depth):
         proc = run_command(
@@ -173,7 +86,7 @@ def iter_parent_commands(*, max_depth: int = 8) -> list[str]:
         parts = line.split(None, 2)
         if len(parts) < 3:
             break
-        commands.append(parts[2].strip())
+        results.append((int(parts[0]), parts[2].strip()))
         try:
             next_pid = int(parts[1])
         except ValueError:
@@ -181,21 +94,42 @@ def iter_parent_commands(*, max_depth: int = 8) -> list[str]:
         if next_pid <= 1 or next_pid == pid:
             break
         pid = next_pid
-    return commands
+    return results
+
+
+def extract_uuid_from_command(command: str) -> str | None:
+    match = UUID_PATTERN.search(command)
+    return match.group(0) if match else None
+
+
+def find_session_uuid_from_parents() -> str | None:
+    for pid, command in iter_parent_processes():
+        session_file = Path.home() / ".claude" / "sessions" / f"{pid}.json"
+        if session_file.exists():
+            try:
+                data = json.loads(session_file.read_text(encoding="utf-8"))
+                sid = data.get("sessionId")
+                if sid and UUID_PATTERN.match(str(sid)):
+                    return str(sid)
+            except (json.JSONDecodeError, OSError):
+                pass
+        uid = extract_uuid_from_command(command)
+        if uid:
+            return uid
+    return None
 
 
 def resolve_session_context(session_override: str | None = None) -> tuple[str, str]:
     if session_override:
-        return normalize_session_name(session_override), "flag"
+        return session_override, "flag"
     for env_name in SESSION_OVERRIDE_ENV_VARS:
         value = os.environ.get(env_name)
         if value:
-            return normalize_session_name(value), f"env:{env_name}"
-    for command in iter_parent_commands():
-        detected = detect_session_from_command(command)
-        if detected:
-            return detected, f"process:{detected}"
-    return DEFAULT_SESSION_NAME, "default"
+            return value, f"env:{env_name}"
+    detected = find_session_uuid_from_parents()
+    if detected:
+        return detected, "process"
+    return str(uuid.uuid4()), "generated"
 
 
 def detect_repo_context(
@@ -203,7 +137,7 @@ def detect_repo_context(
     *,
     session: str | None = None,
 ) -> RepoContext:
-    repo_root = Path(git_output(["rev-parse", "--show-toplevel"], cwd=cwd)).resolve()
+    repo_root = (cwd or Path.cwd()).resolve()
     session_name, session_source = resolve_session_context(session)
     root_dir = repo_root / INDEX_ROOT_DIRNAME
     session_dir = root_dir / session_name
@@ -257,10 +191,8 @@ def current_platform_slug() -> str | None:
 
 
 def install_runtime_hint() -> str:
-    script_path = REPO_ROOT_DIR / "scripts" / "install.sh"
     return (
-        "Install it first with "
-        f"`codebase install-runtime` or `bash {script_path}`."
+        "Install it with `codebase install-runtime`."
     )
 
 
@@ -424,8 +356,6 @@ def determine_refresh_reason(
     *,
     has_db: bool,
     metadata: dict[str, Any] | None,
-    current_head: str,
-    repo_dirty: bool,
     requested_mode: str | None = None,
 ) -> str | None:
     if not has_db:
@@ -434,13 +364,6 @@ def determine_refresh_reason(
         return "missing_metadata"
     if requested_mode and metadata.get("mode") != requested_mode:
         return "mode_changed"
-    if repo_dirty:
-        return "dirty_worktree"
-    indexed_head = str(metadata.get("head_commit") or "").strip()
-    if current_head and not indexed_head:
-        return "missing_head_commit"
-    if current_head and indexed_head and indexed_head != current_head:
-        return "head_changed"
     return None
 
 
@@ -467,7 +390,6 @@ def write_metadata(ctx: RepoContext, *, mode: str, project_name: str) -> None:
         "session_dir": str(ctx.session_dir),
         "cache_dir": str(ctx.cache_dir),
         "project_name": project_name,
-        "head_commit": git_head_commit(ctx.repo_root),
         "db_files": [path.name for path in indexed_db_files(ctx)],
     }
     ctx.metadata_path.write_text(
@@ -497,7 +419,6 @@ def perform_index(ctx: RepoContext, *, mode: str, clean: bool = False) -> dict[s
         "project_name": project_name,
         "db_files": [path.name for path in indexed_db_files(ctx)],
         "mode": mode,
-        "head_commit": git_head_commit(ctx.repo_root),
     }
 
 
@@ -747,8 +668,6 @@ def command_status(args: argparse.Namespace) -> int:
         "session_dir": str(ctx.session_dir),
         "cache_dir": str(ctx.cache_dir),
         "db_files": [path.name for path in indexed_db_files(ctx)],
-        "head_commit": git_head_commit(ctx.repo_root),
-        "repo_dirty": repo_has_non_tool_changes(ctx.repo_root),
     }
     metadata = load_metadata(ctx)
     if metadata:
@@ -817,8 +736,6 @@ def command_refresh(args: argparse.Namespace) -> int:
     reason = "forced" if args.force else determine_refresh_reason(
         has_db=bool(indexed_db_files(ctx)),
         metadata=metadata,
-        current_head=git_head_commit(ctx.repo_root),
-        repo_dirty=repo_has_non_tool_changes(ctx.repo_root),
         requested_mode=args.mode,
     )
 
@@ -827,7 +744,6 @@ def command_refresh(args: argparse.Namespace) -> int:
             "status": "up_to_date",
             "mode": mode,
             "project_name": metadata.get("project_name") if metadata else None,
-            "head_commit": git_head_commit(ctx.repo_root),
         }
         if args.json:
             print_json(payload)
@@ -885,7 +801,6 @@ def command_self_check(args: argparse.Namespace) -> int:
         "tool_version": VERSION,
         "python_version": sys.version.split()[0],
         "platform": platform.platform(),
-        "git_in_path": bool(shutil.which("git")),
         "python3_in_path": bool(shutil.which("python3")),
         "codebase_command_in_path": bool(shutil.which("codebase")),
         "session_name": session_name,
@@ -894,7 +809,6 @@ def command_self_check(args: argparse.Namespace) -> int:
         "local_binary_exists": default_cbm_binary_path().exists(),
         "platform_slug": current_platform_slug(),
         "install_runtime_hint": install_runtime_hint(),
-        "uvx_in_path": bool(shutil.which("uvx")),
     }
     try:
         payload["cbm_runner"] = resolve_cbm_runner()
@@ -903,19 +817,15 @@ def command_self_check(args: argparse.Namespace) -> int:
 
     try:
         ctx = repo_context_from_args(args)
-        payload["inside_git_repo"] = True
-        payload["repo_root"] = str(ctx.repo_root)
+        payload["project_root"] = str(ctx.repo_root)
         payload["root_dir"] = str(ctx.root_dir)
         payload["session_dir"] = str(ctx.session_dir)
-        payload["repo_dirty"] = repo_has_non_tool_changes(ctx.repo_root)
-        payload["head_commit"] = git_head_commit(ctx.repo_root)
         payload["index_exists"] = bool(indexed_db_files(ctx))
         payload["metadata_exists"] = bool(load_metadata(ctx))
         if payload["index_exists"]:
             payload["project_name"] = resolve_project_name(ctx)
     except ToolError as exc:
-        payload["inside_git_repo"] = False
-        payload["repo_error"] = str(exc)
+        payload["project_error"] = str(exc)
 
     if args.json:
         print_json(payload)
@@ -1208,7 +1118,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
     parser.add_argument(
         "--session",
-        help="override the session namespace; default auto-detects codex, claudecode, or opencode",
+        help="session UUID override; defaults to auto-detected agent session ID or a generated UUID",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 

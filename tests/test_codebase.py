@@ -13,80 +13,38 @@ from codebase_cli import cli as MODULE
 
 
 class CodebaseHelpersTest(unittest.TestCase):
-    def test_parse_status_path_for_rename(self) -> None:
-        self.assertEqual(
-            MODULE.parse_status_path("R  old/path.py -> new/path.py"),
-            "new/path.py",
-        )
+    def test_detect_repo_context_uses_cwd(self) -> None:
+        fake_root = Path("/tmp/example-project").resolve()
+        with mock.patch.object(MODULE, "resolve_session_context", return_value=("test-uuid", "flag")):
+            ctx = MODULE.detect_repo_context(cwd=fake_root)
+        self.assertEqual(ctx.repo_root, fake_root)
+        self.assertEqual(ctx.root_dir, fake_root / ".codebase")
+        self.assertEqual(ctx.session_name, "test-uuid")
+        self.assertEqual(ctx.session_dir, fake_root / ".codebase" / "test-uuid")
+        self.assertEqual(ctx.cache_dir, fake_root / ".codebase" / "test-uuid" / "index")
 
-    def test_tool_work_path_detection(self) -> None:
-        self.assertTrue(MODULE.is_tool_work_path(".codebase"))
-        self.assertTrue(MODULE.is_tool_work_path(".codebase/codex/index.db"))
-        self.assertFalse(MODULE.is_tool_work_path("src/app.py"))
-
-    def test_normalize_session_aliases(self) -> None:
-        self.assertEqual(MODULE.normalize_session_name("codex"), "codex")
-        self.assertEqual(MODULE.normalize_session_name("claude-code"), "claudecode")
-        self.assertEqual(MODULE.normalize_session_name("Open Code"), "opencode")
-        self.assertEqual(MODULE.normalize_session_name(""), "default")
-
-    def test_detect_session_from_command(self) -> None:
-        self.assertEqual(
-            MODULE.detect_session_from_command("/Users/example/.nvm/bin/codex"),
-            "codex",
-        )
-        self.assertEqual(
-            MODULE.detect_session_from_command("node /opt/tools/claude"),
-            "claudecode",
-        )
-        self.assertEqual(
-            MODULE.detect_session_from_command("/opt/homebrew/bin/opencode --run"),
-            "opencode",
-        )
-
-    def test_detect_repo_context_uses_session_namespace(self) -> None:
-        fake_repo = Path("/tmp/example-repo").resolve()
-        with mock.patch.object(MODULE, "git_output", return_value=str(fake_repo)):
-            ctx = MODULE.detect_repo_context(session="claude-code")
-        self.assertEqual(ctx.repo_root, fake_repo)
-        self.assertEqual(ctx.root_dir, fake_repo / ".codebase")
-        self.assertEqual(ctx.session_name, "claudecode")
-        self.assertEqual(ctx.session_dir, fake_repo / ".codebase" / "claudecode")
-        self.assertEqual(ctx.cache_dir, fake_repo / ".codebase" / "claudecode" / "index")
+    def test_detect_repo_context_defaults_to_cwd(self) -> None:
+        ctx = MODULE.detect_repo_context()
+        self.assertEqual(ctx.repo_root, Path.cwd().resolve())
 
     def test_refresh_reason_missing_index(self) -> None:
         reason = MODULE.determine_refresh_reason(
             has_db=False,
             metadata=None,
-            current_head="abc",
-            repo_dirty=False,
         )
         self.assertEqual(reason, "missing_index")
 
-    def test_refresh_reason_dirty_worktree(self) -> None:
+    def test_refresh_reason_missing_metadata(self) -> None:
         reason = MODULE.determine_refresh_reason(
             has_db=True,
-            metadata={"mode": "full", "head_commit": "abc"},
-            current_head="abc",
-            repo_dirty=True,
+            metadata=None,
         )
-        self.assertEqual(reason, "dirty_worktree")
-
-    def test_refresh_reason_head_changed(self) -> None:
-        reason = MODULE.determine_refresh_reason(
-            has_db=True,
-            metadata={"mode": "full", "head_commit": "abc"},
-            current_head="def",
-            repo_dirty=False,
-        )
-        self.assertEqual(reason, "head_changed")
+        self.assertEqual(reason, "missing_metadata")
 
     def test_refresh_reason_mode_changed(self) -> None:
         reason = MODULE.determine_refresh_reason(
             has_db=True,
-            metadata={"mode": "fast", "head_commit": "abc"},
-            current_head="abc",
-            repo_dirty=False,
+            metadata={"mode": "fast"},
             requested_mode="full",
         )
         self.assertEqual(reason, "mode_changed")
@@ -94,9 +52,7 @@ class CodebaseHelpersTest(unittest.TestCase):
     def test_refresh_reason_none_when_current(self) -> None:
         reason = MODULE.determine_refresh_reason(
             has_db=True,
-            metadata={"mode": "full", "head_commit": "abc"},
-            current_head="abc",
-            repo_dirty=False,
+            metadata={"mode": "full"},
         )
         self.assertIsNone(reason)
 
@@ -115,6 +71,28 @@ class CodebaseHelpersTest(unittest.TestCase):
         with mock.patch.object(MODULE.platform, "system", return_value="Darwin"):
             with mock.patch.object(MODULE.platform, "machine", return_value="arm64"):
                 self.assertEqual(MODULE.current_platform_slug(), "darwin-arm64")
+
+    def test_extract_uuid_from_command(self) -> None:
+        self.assertEqual(
+            MODULE.extract_uuid_from_command("claude --resume d0f7ca83-c52c-450e-8cc0-4f4f2f3313b8"),
+            "d0f7ca83-c52c-450e-8cc0-4f4f2f3313b8",
+        )
+        self.assertEqual(
+            MODULE.extract_uuid_from_command("codex resume 019da154-2915-7413-852c-230622b512f4"),
+            "019da154-2915-7413-852c-230622b512f4",
+        )
+        self.assertIsNone(MODULE.extract_uuid_from_command("python3 -m codebase_cli index"))
+
+    def test_resolve_session_context_flag_override(self) -> None:
+        name, source = MODULE.resolve_session_context(session_override="my-session-id")
+        self.assertEqual(name, "my-session-id")
+        self.assertEqual(source, "flag")
+
+    def test_resolve_session_context_env_override(self) -> None:
+        with mock.patch.dict("os.environ", {"CODEBASE_SESSION": "env-session-id"}):
+            name, source = MODULE.resolve_session_context()
+        self.assertEqual(name, "env-session-id")
+        self.assertEqual(source, "env:CODEBASE_SESSION")
 
 
 if __name__ == "__main__":

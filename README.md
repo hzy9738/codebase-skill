@@ -14,7 +14,7 @@ Quick links: [Install](#install) · [Quick start](#quick-start) · [Codex skill 
 
 | Area | Decision |
 | --- | --- |
-| Index storage | Repository-local `.codebase/<session>/` |
+| Index storage | Project-local `.codebase/<uuid>/` |
 | Runtime model | Local CLI, no MCP protocol at runtime |
 | Upstream engine | `DeusData/codebase-memory-mcp` |
 | Primary interface | `codebase` shell command |
@@ -23,11 +23,11 @@ Quick links: [Install](#install) · [Quick start](#quick-start) · [Codex skill 
 
 ## What you get
 
-- Repository-local index storage under `.codebase/<session>/`
+- Project-local index storage under `.codebase/<uuid>/`
 - A normal shell command: `codebase`
 - Optional Codex skill install under `~/.codex/skills/codebase`
 - Better defaults for agent workflows: `func`, `calls`, `snippet`, `search-code`, `detect-changes`, `refresh`
-- No GitHub artifact flow and no runtime MCP server requirement
+- No git dependency, no runtime MCP server requirement
 
 ## Positioning
 
@@ -35,7 +35,7 @@ Quick links: [Install](#install) · [Quick start](#quick-start) · [Codex skill 
 
 - project-local storage conventions
 - a CLI-first workflow that agents can call directly
-- refresh metadata and dirty-worktree detection
+- refresh metadata
 - a small optional skill stub for Codex users
 
 If you want raw upstream behavior, call the upstream tool directly. If you want a pragmatic local retrieval workflow for Codex, Claude Code, OpenCode, Copilot, or plain shell use, use this repo.
@@ -51,33 +51,29 @@ This project is for teams or individuals who want code-index style retrieval wit
 
 ## Install
 
-### macOS
+### Prerequisites (macOS)
 
 ```bash
-brew install git python
+brew install python
 ```
 
-### Ubuntu 24.04
+### Prerequisites (Ubuntu 24.04)
 
 ```bash
 sudo apt update
-sudo apt install -y curl git python3 python3-pip
+sudo apt install -y curl python3 python3-pip
 ```
 
-### Install the CLI
-
-From a local clone:
+### One-line install
 
 ```bash
-git clone <your-repo-url> codebase-skill
-cd codebase-skill
-python3 -m pip install --user .
+curl -fsSL https://raw.githubusercontent.com/hzy9738/codebase-skill/main/scripts/install.sh | bash
 ```
 
-Or use the bundled installer:
+With the optional Codex skill:
 
 ```bash
-bash scripts/install.sh
+curl -fsSL https://raw.githubusercontent.com/hzy9738/codebase-skill/main/scripts/install.sh | bash -s -- --install-skill
 ```
 
 The installer:
@@ -87,15 +83,15 @@ The installer:
 - keeps the executable at `~/.local/bin/codebase`
 - installs upstream `codebase-memory-mcp` when possible during setup
 
-If you want the optional Codex skill as well:
+### Install from a local clone
 
 ```bash
-bash scripts/install.sh --install-skill
+git clone https://github.com/hzy9738/codebase-skill.git
+cd codebase-skill
+bash scripts/install.sh
 ```
 
 ## Quick start
-
-Inside a git repository:
 
 ```bash
 codebase index --mode moderate
@@ -117,30 +113,21 @@ codebase --version
 
 ## How it works in a project
 
-`codebase` auto-detects the current git repository and writes only to:
+`codebase` writes indexes under the current working directory:
 
 ```text
-<repo>/.codebase/
-  codex/
+<project>/.codebase/
+  d0f7ca83-c52c-450e-8cc0-4f4f2f3313b8/
     index/*.db
     metadata.json
-  claudecode/
+  019da154-2915-7413-852c-230622b512f4/
     index/*.db
     metadata.json
-  opencode/
-    index/*.db
-    metadata.json
-```
-
-If you do not want `.codebase/` to appear in `git status`, add a local-only exclude:
-
-```bash
-printf '\n.codebase/\n' >> .git/info/exclude
 ```
 
 Typical workflow:
 
-1. Run `codebase index` once on a fresh repository.
+1. Run `codebase index` once on a fresh project.
 2. Use `codebase func` to discover candidate functions or methods.
 3. Use `codebase calls` and `codebase snippet` after symbol resolution.
 4. Use `codebase search-code` for text-oriented retrieval.
@@ -148,9 +135,9 @@ Typical workflow:
 
 Session behavior:
 
-- Index data is isolated per session under `<repo>/.codebase/<session>/`.
-- Session names auto-detect to `codex`, `claudecode`, or `opencode` when possible.
-- Use `codebase --session <name> ...` or `CODEBASE_SESSION=<name>` to override.
+- Index data is isolated per session under `<project>/.codebase/<uuid>/`.
+- Session UUIDs are auto-detected from the parent agent process (Claude Code, Codex, OpenCode) via PID lookup, or generated automatically.
+- Use `codebase --session <id> ...` or `CODEBASE_SESSION=<id>` to override.
 - There is no automatic runtime download on first use. Install the upstream binary explicitly with `codebase install-runtime` if it is missing.
 
 ## Codex skill integration
@@ -181,13 +168,13 @@ For Claude Code, OpenCode, Copilot, or other tools that can run shell commands, 
 
 ## Commands
 
-- `status`: show repository, cache, metadata, and index state
+- `status`: show project, cache, metadata, and index state
 - `install-runtime`: explicitly install `codebase-memory-mcp` into `~/.local/bin`
 - `index`: build or rebuild the local index
-- `refresh`: rebuild only when the repo or index mode changed
+- `refresh`: rebuild only when the index is missing or mode changed
 - `projects`: list indexed projects in the current local cache
 - `reset`: delete `.codebase`
-- `self-check`: verify PATH, dependencies, session detection, repo detection, and index wiring
+- `self-check`: verify PATH, dependencies, session detection, and index wiring
 - `func`: search indexed functions and methods
 - `calls`: show callers and callees for a resolved symbol
 - `snippet`: print the source snippet for a symbol
