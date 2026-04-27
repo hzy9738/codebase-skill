@@ -70,12 +70,6 @@ sudo apt install -y curl python3 python3-pip
 curl -fsSL https://raw.githubusercontent.com/hzy9738/codebase-skill/main/scripts/install.sh | bash
 ```
 
-With the optional Codex skill:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/hzy9738/codebase-skill/main/scripts/install.sh | bash -s -- --install-skill
-```
-
 The installer:
 
 - installs this package with `python3 -m pip install --user`
@@ -140,20 +134,29 @@ Session behavior:
 - Use `codebase --session <id> ...` or `CODEBASE_SESSION=<id>` to override.
 - There is no automatic runtime download on first use. Install the upstream binary explicitly with `codebase install-runtime` if it is missing.
 
-## Codex skill integration
+## Optional skill installation
 
-This repo is CLI-first. The skill is optional and intentionally tiny.
+`codebase` is CLI-first — you can call the `codebase` command directly from any agent that runs shell commands. The skill wrapper is optional and intentionally tiny.
 
-Install the skill:
+To install the skill file interactively:
 
 ```bash
-bash scripts/install.sh --install-skill
+bash scripts/install-skill.sh
 ```
 
-That writes:
+This prompts you to choose a target directory:
 
-```text
-~/.codex/skills/codebase/SKILL.md
+- `~/.agent/skills` (default)
+- `~/.claude/skills` (Claude Code)
+- `~/.codex/skills` (Codex)
+- `~/.opencode/skills` (OpenCode)
+- `~/.cc-switch/skills` (cc-switch)
+- or a custom path
+
+You can also pass the path directly:
+
+```bash
+bash scripts/install-skill.sh ~/.claude/skills
 ```
 
 Recommended `AGENTS.md` rule:
@@ -161,10 +164,6 @@ Recommended `AGENTS.md` rule:
 ```md
 - 内部代码和文档检索优先使用 `codebase` skill，不可用或无结果时再降级到 `rg`、`fd` 或其他命令。
 ```
-
-This keeps your Codex guidance short while still making `codebase` the default indexed retrieval path.
-
-For Claude Code, OpenCode, Copilot, or other tools that can run shell commands, you usually do not need a skill wrapper at all. Call the `codebase` CLI directly.
 
 ## Commands
 

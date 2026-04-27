@@ -70,12 +70,6 @@ sudo apt install -y curl python3 python3-pip
 curl -fsSL https://raw.githubusercontent.com/hzy9738/codebase-skill/main/scripts/install.sh | bash
 ```
 
-附带可选的 Codex skill：
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/hzy9738/codebase-skill/main/scripts/install.sh | bash -s -- --install-skill
-```
-
 安装脚本会做这些事：
 
 - 使用 `python3 -m pip install --user` 安装当前包
@@ -140,20 +134,29 @@ codebase --version
 - 也可以手动用 `codebase --session <id> ...` 或 `CODEBASE_SESSION=<id>` 覆盖。
 - 首次正常使用时不会自动联网下载运行时；如果缺少 `codebase-memory-mcp`，请显式执行 `codebase install-runtime`。
 
-## Codex skill 集成
+## 可选 skill 安装
 
-这个仓库本质上是 CLI-first，skill 是可选项，而且刻意保持很小。
+`codebase` 本质上是 CLI-first，任何能执行 shell 命令的 agent 都能直接调用。skill 封装是可选的，且刻意保持很小。
 
-安装 skill：
+交互式安装 skill 文件：
 
 ```bash
-bash scripts/install.sh --install-skill
+bash scripts/install-skill.sh
 ```
 
-它会写入：
+运行后会提示选择安装目录：
 
-```text
-~/.codex/skills/codebase/SKILL.md
+- `~/.agent/skills`（默认）
+- `~/.claude/skills`（Claude Code）
+- `~/.codex/skills`（Codex）
+- `~/.opencode/skills`（OpenCode）
+- `~/.cc-switch/skills`（cc-switch）
+- 或手动输入路径
+
+也可以直接传参指定：
+
+```bash
+bash scripts/install-skill.sh ~/.claude/skills
 ```
 
 推荐写进项目 `AGENTS.md` 的规则：
@@ -161,10 +164,6 @@ bash scripts/install.sh --install-skill
 ```md
 - 内部代码和文档检索优先使用 `codebase` skill，不可用或无结果时再降级到 `rg`、`fd` 或其他命令。
 ```
-
-这样 Codex 下的默认检索路径就会更稳定。
-
-如果你用的是 Claude Code、OpenCode、Copilot，或者任何能直接执行 shell 命令的工具，通常不需要 skill 封装，直接调用 `codebase` CLI 就可以。
 
 ## 命令列表
 

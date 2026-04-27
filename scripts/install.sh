@@ -6,13 +6,9 @@ REPO_NAME="${REPO_NAME:-codebase-skill}"
 REPO_BRANCH="${REPO_BRANCH:-main}"
 REPO_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}"
 
-LOCAL_BIN_DIR="${HOME}/.local/bin"
-SKILL_HOME_DEFAULT="${HOME}/.codex/skills"
-SKILL_NAME="codebase"
-INSTALL_SKILL=0
-INSTALL_UPSTREAM=1
+LOCAL_BIN_DIR="${LOCAL_BIN_DIR:-${HOME}/.local/bin}"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
-SKILL_HOME="${SKILL_HOME_DEFAULT}"
+INSTALL_UPSTREAM="${INSTALL_UPSTREAM:-1}"
 
 usage() {
   cat <<'EOF'
@@ -21,8 +17,6 @@ Usage:
   curl -fsSL <install-url> | bash -s -- [options]
 
 Options:
-  --install-skill           Install the Codex skill stub under ~/.codex/skills/codebase
-  --skill-home <path>       Override the skill home directory
   --skip-upstream-install   Do not install codebase-memory-mcp during setup
   --python <path>           Python executable to use
   --help                    Show this help message
@@ -31,14 +25,6 @@ EOF
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --install-skill)
-      INSTALL_SKILL=1
-      shift
-      ;;
-    --skill-home)
-      SKILL_HOME="$2"
-      shift 2
-      ;;
     --skip-upstream-install)
       INSTALL_UPSTREAM=0
       shift
@@ -84,7 +70,6 @@ ROOT_DIR="${SCRIPT_DIR}/.."
 
 if [[ -f "${ROOT_DIR}/pyproject.toml" ]] && [[ -f "${ROOT_DIR}/src/codebase_cli/cli.py" ]]; then
   INSTALL_DIR="${ROOT_DIR}"
-  SKILL_SRC="${ROOT_DIR}/skill/SKILL.md"
   echo "==> Installing from local clone: ${INSTALL_DIR}"
 else
   echo "==> Downloading ${REPO_URL} (branch: ${REPO_BRANCH}) ..."
@@ -97,7 +82,6 @@ else
   TARBALL_URL="${REPO_URL}/archive/refs/heads/${REPO_BRANCH}.tar.gz"
   curl -fsSL "${TARBALL_URL}" | tar xz -C "${TMP_DIR}"
   INSTALL_DIR="${TMP_DIR}/${REPO_NAME}-${REPO_BRANCH}"
-  SKILL_SRC="${INSTALL_DIR}/skill/SKILL.md"
   echo "==> Extracted to: ${INSTALL_DIR}"
 fi
 
@@ -128,12 +112,19 @@ if ! pip_install_repo; then
   exit 1
 fi
 
+if [[ ":${PATH}:" != *":${LOCAL_BIN_DIR}:"* ]]; then
+  echo
+  echo "Add ${LOCAL_BIN_DIR} to PATH if needed:"
+  echo "  echo 'export PATH=\"${LOCAL_BIN_DIR}:\$PATH\"' >> ~/.bashrc"
+fi
+
 if [[ "${INSTALL_UPSTREAM}" == "1" ]] && \
    ! command -v codebase-memory-mcp >/dev/null 2>&1; then
   if ! command -v curl >/dev/null 2>&1; then
     echo "Skipping codebase-memory-mcp install because curl is unavailable." >&2
     echo "Run \`codebase install-runtime\` later after curl/proxy is ready." >&2
   else
+    echo "==> Installing upstream codebase-memory-mcp ..."
     curl -fsSL https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh | \
       bash -s -- --skip-config --dir="${LOCAL_BIN_DIR}"
   fi
@@ -141,32 +132,7 @@ fi
 
 if ! command -v codebase-memory-mcp >/dev/null 2>&1 && [ ! -x "${LOCAL_BIN_DIR}/codebase-memory-mcp" ]; then
   echo "Warning: codebase-memory-mcp is still not installed."
-  echo "Run \`codebase install-runtime\` or rerun this script after network/proxy is ready."
-fi
-
-if [[ "${INSTALL_SKILL}" == "1" ]]; then
-  SKILL_DIR="${SKILL_HOME%/}/${SKILL_NAME}"
-  mkdir -p "${SKILL_DIR}"
-  if [[ -f "${SKILL_SRC}" ]]; then
-    cp "${SKILL_SRC}" "${SKILL_DIR}/SKILL.md"
-  else
-    echo "==> Downloading skill definition..."
-    curl -fsSL "https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_BRANCH}/skill/SKILL.md" \
-      -o "${SKILL_DIR}/SKILL.md"
-  fi
-  echo "Installed skill: ${SKILL_DIR}/SKILL.md"
-fi
-
-SHELL_NAME="$(basename "${SHELL:-bash}")"
-RC_FILE="${HOME}/.bashrc"
-if [[ "${SHELL_NAME}" == "zsh" ]]; then
-  RC_FILE="${HOME}/.zshrc"
-fi
-
-if [[ ":${PATH}:" != *":${LOCAL_BIN_DIR}:"* ]]; then
-  echo
-  echo "Add ${LOCAL_BIN_DIR} to PATH if needed:"
-  echo "  echo 'export PATH=\"${LOCAL_BIN_DIR}:\$PATH\"' >> ${RC_FILE}"
+  echo "Run \`codebase install-runtime\` later."
 fi
 
 echo
