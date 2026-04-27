@@ -25,7 +25,7 @@ else
   echo "  5) ~/.cc-switch/skills     (cc-switch)"
   echo "  6) custom path"
   echo
-  read -r -p "Choice [1-6] (default: 1): " choice
+  read -r -p "Choice [1-6] (default: 1): " choice || true
 
   case "${choice:-1}" in
     1) SKILL_HOME="${HOME}/.agent/skills" ;;
@@ -34,7 +34,7 @@ else
     4) SKILL_HOME="${HOME}/.opencode/skills" ;;
     5) SKILL_HOME="${HOME}/.cc-switch/skills" ;;
     6)
-      read -r -p "Enter path: " custom_path
+      read -r -p "Enter path: " custom_path || true
       SKILL_HOME="${custom_path/#\~/$HOME}"
       ;;
     *)
@@ -45,7 +45,7 @@ else
 
   echo
   echo "Target: ${SKILL_HOME}/${SKILL_NAME}/SKILL.md"
-  read -r -p "Confirm install? [Y/n] " confirm
+  read -r -p "Confirm install? [Y/n] " confirm || true
   if [[ "${confirm:-y}" =~ ^[Nn] ]]; then
     echo "Cancelled."
     exit 0
