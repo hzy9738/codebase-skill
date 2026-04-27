@@ -4,11 +4,11 @@ Languages: **English** | [简体中文](README.zh-CN.md)
 
 > CLI-first local code indexing for agent workflows, backed by `codebase-memory-mcp`.
 
-`codebase-skill` is a local CLI plus an optional Codex skill wrapper for the official [`DeusData/codebase-memory-mcp`](https://github.com/DeusData/codebase-memory-mcp) project.
+`codebase-skill` is a local CLI wrapper for the official [`DeusData/codebase-memory-mcp`](https://github.com/DeusData/codebase-memory-mcp) project, with an optional multi-tool skill stub.
 
 It keeps indexes inside the current repository under `.codebase/`, exposes a global `codebase` command, and avoids the MCP protocol at runtime.
 
-Quick links: [Install](#install) · [Quick start](#quick-start) · [Codex skill integration](#codex-skill-integration) · [Development](#development) · [GitHub publishing](#github-publishing)
+Quick links: [Install](#install) · [Quick start](#quick-start) · [Optional skill](#optional-skill-installation) · [Development](#development) · [GitHub publishing](#github-publishing)
 
 ## At a glance
 
@@ -18,14 +18,14 @@ Quick links: [Install](#install) · [Quick start](#quick-start) · [Codex skill 
 | Runtime model | Local CLI, no MCP protocol at runtime |
 | Upstream engine | `DeusData/codebase-memory-mcp` |
 | Primary interface | `codebase` shell command |
-| Agent integration | Optional `~/.codex/skills/codebase/SKILL.md` |
+| Agent integration | Optional `~/.agent/skills/codebase/SKILL.md` (multi-tool) |
 | Target workflow | Codex, Claude Code, OpenCode, Copilot, local CLI |
 
 ## What you get
 
 - Project-local index storage under `.codebase/<uuid>/`
 - A normal shell command: `codebase`
-- Optional Codex skill install under `~/.codex/skills/codebase`
+- Optional multi-tool skill install under `~/.agent/skills/codebase`
 - Better defaults for agent workflows: `func`, `calls`, `snippet`, `search-code`, `detect-changes`, `refresh`
 - No git dependency, no runtime MCP server requirement
 
@@ -36,7 +36,7 @@ Quick links: [Install](#install) · [Quick start](#quick-start) · [Codex skill 
 - project-local storage conventions
 - a CLI-first workflow that agents can call directly
 - refresh metadata
-- a small optional skill stub for Codex users
+- a small optional skill stub for Claude Code, Codex, OpenCode, and similar tools
 
 If you want raw upstream behavior, call the upstream tool directly. If you want a pragmatic local retrieval workflow for Codex, Claude Code, OpenCode, Copilot, or plain shell use, use this repo.
 

@@ -4,11 +4,11 @@
 
 > 面向各类 agent 工作流的本地代码索引 CLI，底层基于 `codebase-memory-mcp`。
 
-`codebase-skill` 是一个本地 CLI 工具，并额外提供一个可选的 Codex skill 封装；底层使用官方 [`DeusData/codebase-memory-mcp`](https://github.com/DeusData/codebase-memory-mcp) 作为索引和图查询引擎。
+`codebase-skill` 是一个本地 CLI 工具，底层使用官方 [`DeusData/codebase-memory-mcp`](https://github.com/DeusData/codebase-memory-mcp) 作为索引和图查询引擎。
 
 它会把索引存到当前项目的 `.codebase/` 下，对外提供全局 `codebase` 命令，并且在日常使用时不依赖 MCP 协议。
 
-快速导航：[安装](#安装) · [快速开始](#快速开始) · [Codex skill 集成](#codex-skill-集成) · [开发](#开发) · [GitHub 发布](#github-发布)
+快速导航：[安装](#安装) · [快速开始](#快速开始) · [可选 skill 安装](#可选-skill-安装) · [开发](#开发) · [GitHub 发布](#github-发布)
 
 ## 一眼看懂
 
@@ -18,14 +18,14 @@
 | 运行时模型 | 本地 CLI，不走 MCP 协议 |
 | 底层引擎 | `DeusData/codebase-memory-mcp` |
 | 主入口 | `codebase` 命令 |
-| Agent 集成 | 可选安装到 `~/.codex/skills/codebase/SKILL.md` |
+| Agent 集成 | 可选安装到 `~/.agent/skills/codebase/SKILL.md` 等目录 |
 | 目标场景 | Codex、Claude Code、OpenCode、Copilot、本地 CLI |
 
 ## 你能得到什么
 
 - 项目本地索引，数据放在 `.codebase/<uuid>/`
 - 一个普通 shell 命令：`codebase`
-- 可选的 Codex skill 安装
+- 可选的多工具 skill 安装
 - 更适合 agent 工作流的默认命令：`func`、`calls`、`snippet`、`search-code`、`detect-changes`、`refresh`
 - 不依赖 git，不要求运行时 MCP server
 
@@ -36,7 +36,7 @@
 - 项目内本地索引存储约定
 - 更适合 agent 直接调用的 CLI 工作流
 - 刷新元数据
-- 一个很小的可选 skill stub，供 Codex 用户接入
+- 一个很小的可选 skill stub，支持 Claude Code、Codex、OpenCode 等工具
 
 如果你想直接使用上游原始能力，可以直接调用上游工具；如果你想要更务实的本地代码检索工作流，就用这个仓库。
 
