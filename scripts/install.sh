@@ -274,7 +274,7 @@ if [[ -t 0 ]]; then
       read -r -p "Choice [1-6] (default: 1): " skill_choice || true
 
       case "${skill_choice:-1}" in
-        1) SKILL_HOME="${HOME}/.agent/skills" ;;
+        1) SKILL_HOME="${HOME}/.agents/skills" ;;
         2) SKILL_HOME="${HOME}/.claude/skills" ;;
         3) SKILL_HOME="${HOME}/.codex/skills" ;;
         4) SKILL_HOME="${HOME}/.opencode/skills" ;;
@@ -283,7 +283,7 @@ if [[ -t 0 ]]; then
           read -r -p "Enter path: " custom_path || true
           SKILL_HOME="${custom_path/#\~/$HOME}"
           ;;
-        *) SKILL_HOME="${HOME}/.agent/skills" ;;
+        *) SKILL_HOME="${HOME}/.agents/skills" ;;
       esac
 
       SKILL_DIR="${SKILL_HOME}/${SKILL_NAME}"

@@ -15,7 +15,7 @@ echo
 if [[ $# -gt 0 ]]; then
   SKILL_HOME="$1"
   echo "Installing to: ${SKILL_HOME}/${SKILL_NAME}/"
-elif [[ -t 0 ]]; then
+else
   echo "Where should the skill be installed?"
   echo
   echo "  1) ~/.agents/skills         (default)"
@@ -25,16 +25,33 @@ elif [[ -t 0 ]]; then
   echo "  5) ~/.cc-switch/skills     (cc-switch)"
   echo "  6) custom path"
   echo
-  read -r -p "Choice [1-6] (default: 1): " choice || true
+
+  if [[ -t 0 ]]; then
+    read -r -p "Choice [1-6] (default: 1): " choice
+  elif [[ -t 1 ]] && [[ -c /dev/tty ]]; then
+    echo -n "Choice [1-6] (default: 1): "
+    read -r choice < /dev/tty
+  else
+    echo "Cannot read input, using default." >&2
+    choice=""
+  fi
 
   case "${choice:-1}" in
-    1) SKILL_HOME="${HOME}/.agent/skills" ;;
+    1) SKILL_HOME="${HOME}/.agents/skills" ;;
     2) SKILL_HOME="${HOME}/.claude/skills" ;;
     3) SKILL_HOME="${HOME}/.codex/skills" ;;
     4) SKILL_HOME="${HOME}/.opencode/skills" ;;
     5) SKILL_HOME="${HOME}/.cc-switch/skills" ;;
     6)
-      read -r -p "Enter path: " custom_path || true
+      if [[ -t 0 ]]; then
+        read -r -p "Enter path: " custom_path
+      elif [[ -c /dev/tty ]]; then
+        echo -n "Enter path: "
+        read -r custom_path < /dev/tty
+      else
+        echo "Cannot read input." >&2
+        exit 1
+      fi
       SKILL_HOME="${custom_path/#\~/$HOME}"
       ;;
     *)
@@ -45,14 +62,19 @@ elif [[ -t 0 ]]; then
 
   echo
   echo "Target: ${SKILL_HOME}/${SKILL_NAME}/SKILL.md"
-  read -r -p "Confirm install? [Y/n] " confirm || true
+
+  if [[ -t 0 ]]; then
+    read -r -p "Confirm install? [Y/n] " confirm
+  elif [[ -c /dev/tty ]]; then
+    echo -n "Confirm install? [Y/n] "
+    read -r confirm < /dev/tty
+  else
+    confirm="y"
+  fi
   if [[ "${confirm:-y}" =~ ^[Nn] ]]; then
     echo "Cancelled."
     exit 0
   fi
-else
-  echo "Non-interactive mode: using default path ${DEFAULT_SKILL_HOME}/${SKILL_NAME}/"
-  SKILL_HOME="${DEFAULT_SKILL_HOME}"
 fi
 
 SKILL_DIR="${SKILL_HOME}/${SKILL_NAME}"
