@@ -296,5 +296,5 @@ if [[ -t 0 ]]; then
 else
   echo "Non-interactive mode: skipping skill installation."
   echo "To install the skill later, run:"
-echo "  curl -fsSL https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_BRANCH}/scripts/install-skill.sh | bash"
+  echo "  curl -fsSL https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_BRANCH}/scripts/install-skill.sh | bash"
 fi
