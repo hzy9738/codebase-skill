@@ -66,45 +66,96 @@ ensure_python() {
   echo
 
   if [[ "${os_name}" == "Darwin" ]]; then
-    echo "  Install: brew install python"
-    read -r -p "Run this command now? [Y/n] " confirm || true
-    if [[ ! "${confirm:-y}" =~ ^[Nn] ]]; then
-      if command -v brew >/dev/null 2>&1; then
-        brew install python || {
-          echo "brew install python failed." >&2
-          exit 1
-        }
-      else
-        echo "Homebrew not found. Install it first: https://brew.sh" >&2
-        exit 1
-      fi
-    else
-      echo "Please install Python and re-run the installer." >&2
+    if ! command -v brew >/dev/null 2>&1; then
+      echo "Homebrew not found. Install it first: https://brew.sh" >&2
       exit 1
     fi
-  elif [[ "${os_name}" == "Linux" ]]; then
-    if command -v apt-get >/dev/null 2>&1; then
-      echo "  Install: sudo apt-get update && sudo apt-get install -y python3 python3-pip"
-      read -r -p "Run this command now? [Y/n] " confirm || true
-      if [[ ! "${confirm:-y}" =~ ^[Nn] ]]; then
-        sudo apt-get update && sudo apt-get install -y python3 python3-pip || {
-          echo "apt-get install failed." >&2
-          exit 1
-        }
-      else
-        echo "Please install Python and re-run the installer." >&2
+
+    echo "Available Python versions via Homebrew:"
+    echo
+    local versions
+    versions="$(brew search '/python@3\.' 2>/dev/null | grep -E '^python@3\.[0-9]+$' | sort -V -r || true)"
+    if [[ -z "${versions}" ]]; then
+      echo "  python@3.13 (latest)"
+      echo "  python@3.12"
+      echo "  python@3.11"
+      versions="python@3.13 python@3.12 python@3.11"
+    fi
+    echo "${versions}" | awk '{printf "  %d) %s\n", NR, $0}'
+    local count
+    count="$(echo "${versions}" | wc -l | tr -d ' ')"
+    echo "  $((count + 1))) custom"
+    echo
+    read -r -p "Choose version [1-$((count + 1))] (default: 1): " ver_choice || true
+
+    local pkg
+    if [[ -z "${ver_choice}" ]] || [[ "${ver_choice}" == "1" ]]; then
+      pkg="$(echo "${versions}" | head -1)"
+    elif [[ "${ver_choice}" -le "${count}" ]] 2>/dev/null; then
+      pkg="$(echo "${versions}" | sed -n "${ver_choice}p")"
+    else
+      read -r -p "Enter package name: " pkg || true
+      if [[ -z "${pkg}" ]]; then
+        echo "No package specified." >&2
         exit 1
       fi
-    else
+    fi
+
+    echo
+    echo "==> brew install ${pkg}"
+    brew install "${pkg}" || {
+      echo "brew install ${pkg} failed." >&2
+      exit 1
+    }
+
+  elif [[ "${os_name}" == "Linux" ]]; then
+    if ! command -v apt-get >/dev/null 2>&1; then
       echo "Unsupported Linux package manager. Please install python3 manually." >&2
       exit 1
     fi
+
+    echo "Available Python versions via apt:"
+    echo
+    echo "  1) python3        (system default, recommended)"
+    echo "  2) python3.12"
+    echo "  3) python3.11"
+    echo "  4) custom"
+    echo
+    read -r -p "Choose version [1-4] (default: 1): " ver_choice || true
+
+    local pkg
+    case "${ver_choice:-1}" in
+      1) pkg="python3 python3-pip" ;;
+      2) pkg="python3.12 python3-pip" ;;
+      3) pkg="python3.11 python3-pip" ;;
+      4)
+        read -r -p "Enter package name(s): " pkg || true
+        if [[ -z "${pkg}" ]]; then
+          echo "No package specified." >&2
+          exit 1
+        fi
+        ;;
+      *) pkg="python3 python3-pip" ;;
+    esac
+
+    echo
+    echo "==> sudo apt-get update && sudo apt-get install -y ${pkg}"
+    sudo apt-get update && sudo apt-get install -y ${pkg} || {
+      echo "apt-get install failed." >&2
+      exit 1
+    }
   fi
 
-  if ! command -v "${want_bin}" >/dev/null 2>&1; then
-    echo "Python installation seems to have failed. Check and re-run." >&2
-    exit 1
-  fi
+  # After install, find the best python3 binary
+  for candidate in "${want_bin}" python3 python3.13 python3.12 python3.11; do
+    if command -v "${candidate}" >/dev/null 2>&1; then
+      PYTHON_BIN="${candidate}"
+      echo "Using: ${PYTHON_BIN} ($(${PYTHON_BIN} --version 2>&1))"
+      return 0
+    fi
+  done
+  echo "Python installation seems to have failed. Check and re-run." >&2
+  exit 1
 }
 
 ensure_python "${PYTHON_BIN}"
