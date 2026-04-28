@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codebase-skill"
-version = "0.5.0"
+version = "0.5.1"
 description = "CLI-first local wrapper for codebase-memory-mcp with repository-local .codebase storage."
 readme = "README.md"
 requires-python = ">=3.10"

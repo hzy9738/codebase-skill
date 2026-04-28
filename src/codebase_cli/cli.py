@@ -19,7 +19,7 @@ from typing import Any
 
 
 APP_NAME = "codebase"
-VERSION = "0.5.0"
+VERSION = "0.5.1"
 INDEX_ROOT_DIRNAME = ".codebase"
 INDEX_CACHE_DIRNAME = "index"
 METADATA_FILENAME = "metadata.json"
