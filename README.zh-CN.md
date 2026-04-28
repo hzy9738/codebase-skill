@@ -18,7 +18,7 @@
 | 运行时模型 | 本地 CLI，不走 MCP 协议 |
 | 底层引擎 | `DeusData/codebase-memory-mcp` |
 | 主入口 | `codebase` 命令 |
-| Agent 集成 | 可选安装到 `~/.agent/skills/codebase/SKILL.md` 等目录 |
+| Agent 集成 | 可选安装到 `~/.agents/skills/codebase/SKILL.md` 等目录 |
 | 目标场景 | Codex、Claude Code、OpenCode、Copilot、本地 CLI |
 
 ## 你能得到什么
@@ -146,7 +146,7 @@ bash scripts/install-skill.sh
 
 运行后会提示选择安装目录：
 
-- `~/.agent/skills`（默认）
+- `~/.agents/skills`（默认）
 - `~/.claude/skills`（Claude Code）
 - `~/.codex/skills`（Codex）
 - `~/.opencode/skills`（OpenCode）

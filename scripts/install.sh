@@ -264,7 +264,7 @@ if [[ -t 0 ]]; then
     else
       echo
       echo "Where should the skill be installed?"
-      echo "  1) ~/.agent/skills         (default)"
+      echo "  1) ~/.agents/skills         (default)"
       echo "  2) ~/.claude/skills        (Claude Code)"
       echo "  3) ~/.codex/skills         (Codex)"
       echo "  4) ~/.opencode/skills      (OpenCode)"

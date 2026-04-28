@@ -2,7 +2,7 @@
 set -euo pipefail
 
 SKILL_NAME="codebase"
-DEFAULT_SKILL_HOME="${HOME}/.agent/skills"
+DEFAULT_SKILL_HOME="${HOME}/.agents/skills"
 
 REPO_OWNER="${REPO_OWNER:-hzy9738}"
 REPO_NAME="${REPO_NAME:-codebase-skill}"
@@ -18,7 +18,7 @@ if [[ $# -gt 0 ]]; then
 elif [[ -t 0 ]]; then
   echo "Where should the skill be installed?"
   echo
-  echo "  1) ~/.agent/skills         (default)"
+  echo "  1) ~/.agents/skills         (default)"
   echo "  2) ~/.claude/skills        (Claude Code)"
   echo "  3) ~/.codex/skills         (Codex)"
   echo "  4) ~/.opencode/skills      (OpenCode)"

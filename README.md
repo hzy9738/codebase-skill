@@ -18,14 +18,14 @@ Quick links: [Install](#install) · [Quick start](#quick-start) · [Optional ski
 | Runtime model | Local CLI, no MCP protocol at runtime |
 | Upstream engine | `DeusData/codebase-memory-mcp` |
 | Primary interface | `codebase` shell command |
-| Agent integration | Optional `~/.agent/skills/codebase/SKILL.md` (multi-tool) |
+| Agent integration | Optional `~/.agents/skills/codebase/SKILL.md` (multi-tool) |
 | Target workflow | Codex, Claude Code, OpenCode, Copilot, local CLI |
 
 ## What you get
 
 - Project-local index storage under `.codebase/<uuid>/`
 - A normal shell command: `codebase`
-- Optional multi-tool skill install under `~/.agent/skills/codebase`
+- Optional multi-tool skill install under `~/.agents/skills/codebase`
 - Better defaults for agent workflows: `func`, `calls`, `snippet`, `search-code`, `detect-changes`, `refresh`
 - No git dependency, no runtime MCP server requirement
 
@@ -146,7 +146,7 @@ bash scripts/install-skill.sh
 
 This prompts you to choose a target directory:
 
-- `~/.agent/skills` (default)
+- `~/.agents/skills` (default)
 - `~/.claude/skills` (Claude Code)
 - `~/.codex/skills` (Codex)
 - `~/.opencode/skills` (OpenCode)
