@@ -295,5 +295,6 @@ if [[ -t 0 ]]; then
   fi
 else
   echo "Non-interactive mode: skipping skill installation."
-  echo "Run \`bash scripts/install-skill.sh\` manually to install the skill file for AI agents."
+  echo "To install the skill later, run:"
+echo "  curl -fsSL https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_BRANCH}/scripts/install-skill.sh | bash"
 fi
