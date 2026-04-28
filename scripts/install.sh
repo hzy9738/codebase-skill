@@ -53,10 +53,61 @@ case "$(uname -s)" in
     ;;
 esac
 
-if ! command -v "${PYTHON_BIN}" >/dev/null 2>&1; then
-  echo "Missing Python executable: ${PYTHON_BIN}" >&2
-  exit 1
-fi
+ensure_python() {
+  local want_bin="$1"
+  local os_name
+  os_name="$(uname -s)"
+
+  if command -v "${want_bin}" >/dev/null 2>&1; then
+    return 0
+  fi
+
+  echo "Python (${want_bin}) is not found."
+  echo
+
+  if [[ "${os_name}" == "Darwin" ]]; then
+    echo "  Install: brew install python"
+    read -r -p "Run this command now? [Y/n] " confirm || true
+    if [[ ! "${confirm:-y}" =~ ^[Nn] ]]; then
+      if command -v brew >/dev/null 2>&1; then
+        brew install python || {
+          echo "brew install python failed." >&2
+          exit 1
+        }
+      else
+        echo "Homebrew not found. Install it first: https://brew.sh" >&2
+        exit 1
+      fi
+    else
+      echo "Please install Python and re-run the installer." >&2
+      exit 1
+    fi
+  elif [[ "${os_name}" == "Linux" ]]; then
+    if command -v apt-get >/dev/null 2>&1; then
+      echo "  Install: sudo apt-get update && sudo apt-get install -y python3 python3-pip"
+      read -r -p "Run this command now? [Y/n] " confirm || true
+      if [[ ! "${confirm:-y}" =~ ^[Nn] ]]; then
+        sudo apt-get update && sudo apt-get install -y python3 python3-pip || {
+          echo "apt-get install failed." >&2
+          exit 1
+        }
+      else
+        echo "Please install Python and re-run the installer." >&2
+        exit 1
+      fi
+    else
+      echo "Unsupported Linux package manager. Please install python3 manually." >&2
+      exit 1
+    fi
+  fi
+
+  if ! command -v "${want_bin}" >/dev/null 2>&1; then
+    echo "Python installation seems to have failed. Check and re-run." >&2
+    exit 1
+  fi
+}
+
+ensure_python "${PYTHON_BIN}"
 
 if ! "${PYTHON_BIN}" -m pip --version >/dev/null 2>&1; then
   "${PYTHON_BIN}" -m ensurepip --upgrade --user >/dev/null 2>&1 || {
@@ -139,3 +190,46 @@ echo
 echo "Installed CLI: ${LOCAL_BIN_DIR}/codebase"
 echo "Try:"
 echo "  codebase --help"
+echo
+
+# --- Optional skill installation ---
+echo "A skill file tells AI agents (Claude Code, Codex, OpenCode) how to use the codebase CLI."
+read -r -p "Install skill file now? [y/N] " install_skill || true
+if [[ "${install_skill:-n}" =~ ^[Yy] ]]; then
+  SKILL_NAME="codebase"
+
+  if [[ -f "${INSTALL_DIR}/scripts/install-skill.sh" ]]; then
+    echo
+    bash "${INSTALL_DIR}/scripts/install-skill.sh"
+  else
+    echo
+    echo "Where should the skill be installed?"
+    echo "  1) ~/.agent/skills         (default)"
+    echo "  2) ~/.claude/skills        (Claude Code)"
+    echo "  3) ~/.codex/skills         (Codex)"
+    echo "  4) ~/.opencode/skills      (OpenCode)"
+    echo "  5) ~/.cc-switch/skills     (cc-switch)"
+    echo "  6) custom path"
+    echo
+    read -r -p "Choice [1-6] (default: 1): " skill_choice || true
+
+    case "${skill_choice:-1}" in
+      1) SKILL_HOME="${HOME}/.agent/skills" ;;
+      2) SKILL_HOME="${HOME}/.claude/skills" ;;
+      3) SKILL_HOME="${HOME}/.codex/skills" ;;
+      4) SKILL_HOME="${HOME}/.opencode/skills" ;;
+      5) SKILL_HOME="${HOME}/.cc-switch/skills" ;;
+      6)
+        read -r -p "Enter path: " custom_path || true
+        SKILL_HOME="${custom_path/#\~/$HOME}"
+        ;;
+      *) SKILL_HOME="${HOME}/.agent/skills" ;;
+    esac
+
+    SKILL_DIR="${SKILL_HOME}/${SKILL_NAME}"
+    mkdir -p "${SKILL_DIR}"
+    curl -fsSL "https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_BRANCH}/skill/SKILL.md" \
+      -o "${SKILL_DIR}/SKILL.md"
+    echo "Installed: ${SKILL_DIR}/SKILL.md"
+  fi
+fi
