@@ -71,34 +71,37 @@ ensure_python() {
       exit 1
     fi
 
-    echo "Available Python versions via Homebrew:"
-    echo
     local versions
     versions="$(brew search '/python@3\.' 2>/dev/null | grep -E '^python@3\.[0-9]+$' | sort -V -r || true)"
     if [[ -z "${versions}" ]]; then
-      echo "  python@3.13 (latest)"
-      echo "  python@3.12"
-      echo "  python@3.11"
       versions="python@3.13 python@3.12 python@3.11"
     fi
-    echo "${versions}" | awk '{printf "  %d) %s\n", NR, $0}'
-    local count
-    count="$(echo "${versions}" | wc -l | tr -d ' ')"
-    echo "  $((count + 1))) custom"
-    echo
-    read -r -p "Choose version [1-$((count + 1))] (default: 1): " ver_choice || true
 
     local pkg
-    if [[ -z "${ver_choice}" ]] || [[ "${ver_choice}" == "1" ]]; then
-      pkg="$(echo "${versions}" | head -1)"
-    elif [[ "${ver_choice}" -le "${count}" ]] 2>/dev/null; then
-      pkg="$(echo "${versions}" | sed -n "${ver_choice}p")"
-    else
-      read -r -p "Enter package name: " pkg || true
-      if [[ -z "${pkg}" ]]; then
-        echo "No package specified." >&2
-        exit 1
+    if [[ -t 0 ]]; then
+      echo "Available Python versions via Homebrew:"
+      echo
+      echo "${versions}" | awk '{printf "  %d) %s\n", NR, $0}'
+      local count
+      count="$(echo "${versions}" | wc -l | tr -d ' ')"
+      echo "  $((count + 1))) custom"
+      echo
+      read -r -p "Choose version [1-$((count + 1))] (default: 1): " ver_choice || true
+
+      if [[ -z "${ver_choice}" ]] || [[ "${ver_choice}" == "1" ]]; then
+        pkg="$(echo "${versions}" | head -1)"
+      elif [[ "${ver_choice}" -le "${count}" ]] 2>/dev/null; then
+        pkg="$(echo "${versions}" | sed -n "${ver_choice}p")"
+      else
+        read -r -p "Enter package name: " pkg || true
+        if [[ -z "${pkg}" ]]; then
+          echo "No package specified." >&2
+          exit 1
+        fi
       fi
+    else
+      echo "Non-interactive mode: auto-selecting latest Python version"
+      pkg="$(echo "${versions}" | head -1)"
     fi
 
     echo
@@ -114,29 +117,34 @@ ensure_python() {
       exit 1
     fi
 
-    echo "Available Python versions via apt:"
-    echo
-    echo "  1) python3        (system default, recommended)"
-    echo "  2) python3.12"
-    echo "  3) python3.11"
-    echo "  4) custom"
-    echo
-    read -r -p "Choose version [1-4] (default: 1): " ver_choice || true
-
     local pkg
-    case "${ver_choice:-1}" in
-      1) pkg="python3 python3-pip" ;;
-      2) pkg="python3.12 python3-pip" ;;
-      3) pkg="python3.11 python3-pip" ;;
-      4)
-        read -r -p "Enter package name(s): " pkg || true
-        if [[ -z "${pkg}" ]]; then
-          echo "No package specified." >&2
-          exit 1
-        fi
-        ;;
-      *) pkg="python3 python3-pip" ;;
-    esac
+    if [[ -t 0 ]]; then
+      echo "Available Python versions via apt:"
+      echo
+      echo "  1) python3        (system default, recommended)"
+      echo "  2) python3.12"
+      echo "  3) python3.11"
+      echo "  4) custom"
+      echo
+      read -r -p "Choose version [1-4] (default: 1): " ver_choice || true
+
+      case "${ver_choice:-1}" in
+        1) pkg="python3 python3-pip" ;;
+        2) pkg="python3.12 python3-pip" ;;
+        3) pkg="python3.11 python3-pip" ;;
+        4)
+          read -r -p "Enter package name(s): " pkg || true
+          if [[ -z "${pkg}" ]]; then
+            echo "No package specified." >&2
+            exit 1
+          fi
+          ;;
+        *) pkg="python3 python3-pip" ;;
+      esac
+    else
+      echo "Non-interactive mode: auto-selecting python3 (system default)"
+      pkg="python3 python3-pip"
+    fi
 
     echo
     echo "==> sudo apt-get update && sudo apt-get install -y ${pkg}"
@@ -244,43 +252,48 @@ echo "  codebase --help"
 echo
 
 # --- Optional skill installation ---
-echo "A skill file tells AI agents (Claude Code, Codex, OpenCode) how to use the codebase CLI."
-read -r -p "Install skill file now? [y/N] " install_skill || true
-if [[ "${install_skill:-n}" =~ ^[Yy] ]]; then
-  SKILL_NAME="codebase"
+if [[ -t 0 ]]; then
+  echo "A skill file tells AI agents (Claude Code, Codex, OpenCode) how to use the codebase CLI."
+  read -r -p "Install skill file now? [y/N] " install_skill || true
+  if [[ "${install_skill:-n}" =~ ^[Yy] ]]; then
+    SKILL_NAME="codebase"
 
-  if [[ -f "${INSTALL_DIR}/scripts/install-skill.sh" ]]; then
-    echo
-    bash "${INSTALL_DIR}/scripts/install-skill.sh"
-  else
-    echo
-    echo "Where should the skill be installed?"
-    echo "  1) ~/.agent/skills         (default)"
-    echo "  2) ~/.claude/skills        (Claude Code)"
-    echo "  3) ~/.codex/skills         (Codex)"
-    echo "  4) ~/.opencode/skills      (OpenCode)"
-    echo "  5) ~/.cc-switch/skills     (cc-switch)"
-    echo "  6) custom path"
-    echo
-    read -r -p "Choice [1-6] (default: 1): " skill_choice || true
+    if [[ -f "${INSTALL_DIR}/scripts/install-skill.sh" ]]; then
+      echo
+      bash "${INSTALL_DIR}/scripts/install-skill.sh"
+    else
+      echo
+      echo "Where should the skill be installed?"
+      echo "  1) ~/.agent/skills         (default)"
+      echo "  2) ~/.claude/skills        (Claude Code)"
+      echo "  3) ~/.codex/skills         (Codex)"
+      echo "  4) ~/.opencode/skills      (OpenCode)"
+      echo "  5) ~/.cc-switch/skills     (cc-switch)"
+      echo "  6) custom path"
+      echo
+      read -r -p "Choice [1-6] (default: 1): " skill_choice || true
 
-    case "${skill_choice:-1}" in
-      1) SKILL_HOME="${HOME}/.agent/skills" ;;
-      2) SKILL_HOME="${HOME}/.claude/skills" ;;
-      3) SKILL_HOME="${HOME}/.codex/skills" ;;
-      4) SKILL_HOME="${HOME}/.opencode/skills" ;;
-      5) SKILL_HOME="${HOME}/.cc-switch/skills" ;;
-      6)
-        read -r -p "Enter path: " custom_path || true
-        SKILL_HOME="${custom_path/#\~/$HOME}"
-        ;;
-      *) SKILL_HOME="${HOME}/.agent/skills" ;;
-    esac
+      case "${skill_choice:-1}" in
+        1) SKILL_HOME="${HOME}/.agent/skills" ;;
+        2) SKILL_HOME="${HOME}/.claude/skills" ;;
+        3) SKILL_HOME="${HOME}/.codex/skills" ;;
+        4) SKILL_HOME="${HOME}/.opencode/skills" ;;
+        5) SKILL_HOME="${HOME}/.cc-switch/skills" ;;
+        6)
+          read -r -p "Enter path: " custom_path || true
+          SKILL_HOME="${custom_path/#\~/$HOME}"
+          ;;
+        *) SKILL_HOME="${HOME}/.agent/skills" ;;
+      esac
 
-    SKILL_DIR="${SKILL_HOME}/${SKILL_NAME}"
-    mkdir -p "${SKILL_DIR}"
-    curl -fsSL "https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_BRANCH}/skill/SKILL.md" \
-      -o "${SKILL_DIR}/SKILL.md"
-    echo "Installed: ${SKILL_DIR}/SKILL.md"
+      SKILL_DIR="${SKILL_HOME}/${SKILL_NAME}"
+      mkdir -p "${SKILL_DIR}"
+      curl -fsSL "https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}/${REPO_BRANCH}/skill/SKILL.md" \
+        -o "${SKILL_DIR}/SKILL.md"
+      echo "Installed: ${SKILL_DIR}/SKILL.md"
+    fi
   fi
+else
+  echo "Non-interactive mode: skipping skill installation."
+  echo "Run \`bash scripts/install-skill.sh\` manually to install the skill file for AI agents."
 fi

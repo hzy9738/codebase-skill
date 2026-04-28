@@ -15,7 +15,7 @@ echo
 if [[ $# -gt 0 ]]; then
   SKILL_HOME="$1"
   echo "Installing to: ${SKILL_HOME}/${SKILL_NAME}/"
-else
+elif [[ -t 0 ]]; then
   echo "Where should the skill be installed?"
   echo
   echo "  1) ~/.agent/skills         (default)"
@@ -50,6 +50,9 @@ else
     echo "Cancelled."
     exit 0
   fi
+else
+  echo "Non-interactive mode: using default path ${DEFAULT_SKILL_HOME}/${SKILL_NAME}/"
+  SKILL_HOME="${DEFAULT_SKILL_HOME}"
 fi
 
 SKILL_DIR="${SKILL_HOME}/${SKILL_NAME}"
