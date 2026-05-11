@@ -1,0 +1,22 @@
+{
+  "name": "codebase-skill",
+  "version": "0.6.0",
+  "description": "Repository-local deep code retrieval CLI that uses codebase-memory-mcp as backend",
+  "main": "bin/codebase",
+  "bin": {
+    "codebase": "bin/codebase"
+  },
+  "keywords": [
+    "codebase",
+    "cli",
+    "code-indexing",
+    "retrieval",
+    "mcp",
+    "codebase-memory-mcp"
+  ],
+  "author": "hzy9738",
+  "license": "MIT",
+  "engines": {
+    "node": ">=19.0.0"
+  }
+}

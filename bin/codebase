@@ -1,7 +1,83 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/usr/bin/env node
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-export PYTHONPATH="${ROOT_DIR}/src${PYTHONPATH:+:${PYTHONPATH}}"
+const { spawn } = require("child_process");
+const path = require("path");
+const fs = require("fs");
 
-exec python3 -m codebase_cli "$@"
+const VERSION = "0.6.0";
+
+function findCodebaseMemoryMcp() {
+  const possiblePaths = [
+    "codebase-memory-mcp",
+    path.join(process.env.HOME || "", ".local/bin/codebase-memory-mcp"),
+    "/usr/local/bin/codebase-memory-mcp",
+    "/opt/homebrew/bin/codebase-memory-mcp",
+  ];
+  for (const p of possiblePaths) {
+    try {
+      if (fs.existsSync(p)) {
+        const s = fs.statSync(p);
+        if (s.isFile() && (s.mode & 0o111)) return p;
+      }
+    } catch (_) { continue; }
+  }
+  return null;
+}
+
+async function main() {
+  const args = process.argv.slice(2);
+
+  if (args.includes("--version") || args.includes("-v")) {
+    console.log("codebase " + VERSION);
+    return;
+  }
+
+  if (args.includes("--help") || args.includes("-h") || args.length === 0) {
+    console.log("codebase " + VERSION);
+    console.log("Local repository-scoped wrapper around codebase-memory-mcp");
+    console.log();
+    console.log("Usage: codebase [command] [options]");
+    console.log();
+    console.log("Commands:");
+    console.log("  install-runtime     Install codebase-memory-mcp into ~/.local/bin");
+    console.log("  status              Show local index status for the current session");
+    console.log("  index               Build the local index under .codebase/<session>");
+    console.log("  refresh             Rebuild only when local index is stale");
+    console.log("  projects            List indexed projects in local cache");
+    console.log("  reset               Delete the local .codebase/<session> index");
+    console.log("  self-check          Verify environment and repo wiring");
+    console.log("  func                Search indexed functions and methods");
+    console.log("  calls               Show callers and callees for a symbol");
+    console.log("  snippet             Show source for a symbol");
+    console.log("  search-graph        Direct wrapper around search_graph");
+    console.log("  trace-path          Direct wrapper around trace_path");
+    console.log("  search-code         Text/code search with graph-aware ranking");
+    console.log("  query-graph         Run a graph query directly");
+    console.log("  detect-changes      Show changed files and impacted symbols");
+    console.log("  architecture        Get architecture summary");
+    console.log("  schema              Get graph schema summary");
+    console.log("  index-status        Get upstream index status");
+    console.log("  adr                 Manage ADR content via upstream manage_adr");
+    console.log("  ingest-traces       Ingest runtime traces from a JSON file");
+    console.log();
+    console.log("Options:");
+    console.log("  -v, --version       Show version");
+    console.log("  -h, --help          Show this help message");
+    console.log("  -s, --session       Session ID override");
+    return;
+  }
+
+  const cbm = findCodebaseMemoryMcp();
+  if (!cbm) {
+    console.error("Error: codebase-memory-mcp not found.");
+    console.error("Please install it first:");
+    console.error("  curl -fsSL https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh | bash");
+    process.exit(1);
+  }
+
+  const child = spawn(cbm, ["cli", ...args], { stdio: "inherit", env: process.env });
+  child.on("close", function(code) { process.exit(code || 0); });
+  child.on("error", function(err) { console.error("Error:", err.message); process.exit(1); });
+}
+
+main();
