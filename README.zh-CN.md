@@ -54,14 +54,14 @@
 ### 前置依赖（macOS）
 
 ```bash
-brew install python
+brew install node
 ```
 
 ### 前置依赖（Ubuntu 24.04）
 
 ```bash
 sudo apt update
-sudo apt install -y curl python3 python3-pip
+sudo apt install -y curl nodejs npm
 ```
 
 ### 一行安装
@@ -72,8 +72,8 @@ curl -fsSL https://raw.githubusercontent.com/hzy9738/codebase-skill/main/scripts
 
 安装脚本会做这些事：
 
-- 使用 `python3 -m pip install --user` 安装当前包
-- 在遇到 PEP 668 风格环境时自动尝试 `--break-system-packages`
+- 确保 Node.js >= 19 可用
+- 通过 `npm install -g` 全局安装当前包
 - 把可执行命令安装到 `~/.local/bin/codebase`
 - 在安装阶段尽量把 `codebase-memory-mcp` 一起装好
 

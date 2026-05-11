@@ -54,7 +54,35 @@ This project is for teams or individuals who want code-index style retrieval wit
 ### Prerequisites (macOS)
 
 ```bash
-brew install python
+brew install node
+```
+
+### Prerequisites (Ubuntu 24.04)
+
+```bash
+sudo apt update
+sudo apt install -y curl nodejs npm
+```
+
+### One-line install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/hzy9738/codebase-skill/main/scripts/install.sh | bash
+```
+
+The installer:
+
+- ensures Node.js >= 19 is available
+- installs this package globally via `npm install -g`
+- keeps the executable at `~/.local/bin/codebase`
+- installs upstream `codebase-memory-mcp` when possible during setup
+
+### Install from a local clone
+
+```bash
+git clone https://github.com/hzy9738/codebase-skill.git
+cd codebase-skill
+bash scripts/install.sh
 ```
 
 ### Prerequisites (Ubuntu 24.04)
