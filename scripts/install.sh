@@ -75,7 +75,7 @@ ensure_node
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-.}")" && pwd)"
 ROOT_DIR="${SCRIPT_DIR}/.."
 
-if [[ -f "${ROOT_DIR}/package.json" ]] && [[ -f "${ROOT_DIR}/src/cli.mjs" ]]; then
+if [[ -f "${ROOT_DIR}/bin/codebase" ]]; then
   INSTALL_DIR="${ROOT_DIR}"
   echo "==> Installing from local clone: ${INSTALL_DIR}"
 else
@@ -94,33 +94,21 @@ fi
 
 # --- Install package globally ---
 install_global() {
-  echo "==> Installing globally via npm link..."
-  cd "${INSTALL_DIR}"
+  echo "==> Creating symlink to ~/.local/bin..."
   
-  # Create a temporary directory for global install
-  local tmp_global
-  tmp_global="$(mktemp -d)"
-  
-  # Copy the package into temporary directory
-  cp -r "${INSTALL_DIR}/package.json" "${INSTALL_DIR}/bin" "${INSTALL_DIR}/src" "${tmp_global}/"
-  
-  # Install globally
-  cd "${tmp_global}"
-  if npm install -g .; then
-    echo "✓ Global installation successful"
-  else
-    echo "Global installation via npm failed. Trying local symlink approach..."
-    
-    # Fallback: symlink bin/codebase to ~/.local/bin
-    mkdir -p "${LOCAL_BIN_DIR}"
-    ln -sf "${INSTALL_DIR}/bin/codebase" "${LOCAL_BIN_DIR}/codebase" || {
-      echo "Failed to create symlink."
-      exit 1
-    }
-    echo "✓ Symlink created at ${LOCAL_BIN_DIR}/codebase"
+  # Check if required files exist
+  if [[ ! -f "${INSTALL_DIR}/bin/codebase" ]]; then
+    echo "Error: bin/codebase not found in ${INSTALL_DIR}" >&2
+    exit 1
   fi
   
-  rm -rf "${tmp_global}"
+  # Create symlink to ~/.local/bin
+  mkdir -p "${LOCAL_BIN_DIR}"
+  ln -sf "${INSTALL_DIR}/bin/codebase" "${LOCAL_BIN_DIR}/codebase" || {
+    echo "Failed to create symlink."
+    exit 1
+  }
+  echo "✓ Symlink created at ${LOCAL_BIN_DIR}/codebase"
 }
 
 mkdir -p "${LOCAL_BIN_DIR}"
