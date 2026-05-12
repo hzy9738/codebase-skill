@@ -2,11 +2,9 @@
 
 Languages: **English** | [简体中文](README.zh-CN.md)
 
-> CLI-first local code indexing for agent workflows, backed by `codebase-memory-mcp`.
+> A lightweight Node.js CLI that brings deep code retrieval to your terminal — no Python, no MCP protocol at runtime.
 
-`codebase-skill` is a local CLI wrapper for the official [`DeusData/codebase-memory-mcp`](https://github.com/DeusData/codebase-memory-mcp) project, with an optional multi-tool skill stub.
-
-It keeps indexes inside the current repository under `.codebase/`, exposes a global `codebase` command, and avoids the MCP protocol at runtime.
+`codebase-skill` wraps the official [`DeusData/codebase-memory-mcp`](https://github.com/DeusData/codebase-memory-mcp) engine into a simple `codebase` command. Indexes live inside your project under `.codebase/`, sessions are auto-detected, and everything works over plain CLI.
 
 Quick links: [Install](#install) · [Quick start](#quick-start) · [Optional skill](#optional-skill-installation) · [Development](#development) · [GitHub publishing](#github-publishing)
 
@@ -14,82 +12,59 @@ Quick links: [Install](#install) · [Quick start](#quick-start) · [Optional ski
 
 | Area | Decision |
 | --- | --- |
+| Language | Node.js (zero Python dependency) |
 | Index storage | Project-local `.codebase/<uuid>/` |
 | Runtime model | Local CLI, no MCP protocol at runtime |
 | Upstream engine | `DeusData/codebase-memory-mcp` |
 | Primary interface | `codebase` shell command |
-| Agent integration | Optional `~/.agents/skills/codebase/SKILL.md` (multi-tool) |
-| Target workflow | Codex, Claude Code, OpenCode, Copilot, local CLI |
+| Agent integration | Optional `~/.agents/skills/codebase/SKILL.md` |
+| Target workflow | Codex, Claude Code, OpenCode, Copilot, shell |
 
 ## What you get
 
-- Project-local index storage under `.codebase/<uuid>/`
-- A normal shell command: `codebase`
-- Optional multi-tool skill install under `~/.agents/skills/codebase`
-- Better defaults for agent workflows: `func`, `calls`, `snippet`, `search-code`, `detect-changes`, `refresh`
-- No git dependency, no runtime MCP server requirement
+- A single `codebase` command that works anywhere
+- Project-local indexes under `.codebase/<uuid>/`
+- Agent-friendly defaults: `func`, `calls`, `snippet`, `search-code`, `detect-changes`, `refresh`
+- Optional skill stub for multi-tool agents
+- No git dependency, no runtime MCP server, no Python
 
 ## Positioning
 
-`codebase-memory-mcp` is still the real indexer and graph engine. This repo adds:
+`codebase-memory-mcp` is the real indexer and graph engine. This repo adds:
 
 - project-local storage conventions
-- a CLI-first workflow that agents can call directly
+- a CLI-first workflow agents can call directly
 - refresh metadata
-- a small optional skill stub for Claude Code, Codex, OpenCode, and similar tools
+- a small skill stub for Claude Code, Codex, OpenCode, and similar tools
 
-If you want raw upstream behavior, call the upstream tool directly. If you want a pragmatic local retrieval workflow for Codex, Claude Code, OpenCode, Copilot, or plain shell use, use this repo.
+Use the upstream tool directly if you want raw behavior. Use this repo if you want a pragmatic local retrieval workflow.
 
 ## Why this repo exists
 
-This project is for teams or individuals who want code-index style retrieval without turning every lookup into an MCP round trip.
+For teams and individuals who want code-index retrieval without turning every lookup into an MCP round trip:
 
-- Keep indexing local to the repository instead of scattering state elsewhere.
-- Give agents a stable `codebase` command instead of a protocol dependency.
-- Keep repo instructions simple: use `codebase` first, then fall back to `rg`.
-- Reuse the upstream graph/index engine without inheriting MCP runtime overhead.
+- Keep indexes local to the repository instead of scattering state elsewhere
+- Give agents a stable `codebase` command instead of a protocol dependency
+- Keep instructions simple: `codebase` first, then fall back to `rg`
+- Reuse the upstream engine without inheriting MCP runtime overhead
 
 ## Install
 
-### Prerequisites (macOS)
+### Prerequisites
+
+Node.js >= 19 is required. Install it with your preferred method:
 
 ```bash
+# macOS
 brew install node
-```
 
-### Prerequisites (Ubuntu 24.04)
+# Linux (Ubuntu)
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs
 
-```bash
-sudo apt update
-sudo apt install -y curl nodejs npm
-```
-
-### One-line install
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/hzy9738/codebase-skill/main/scripts/install.sh | bash
-```
-
-The installer:
-
-- ensures Node.js >= 19 is available
-- installs this package globally via `npm install -g`
-- keeps the executable at `~/.local/bin/codebase`
-- installs upstream `codebase-memory-mcp` when possible during setup
-
-### Install from a local clone
-
-```bash
-git clone https://github.com/hzy9738/codebase-skill.git
-cd codebase-skill
-bash scripts/install.sh
-```
-
-### Prerequisites (Ubuntu 24.04)
-
-```bash
-sudo apt update
-sudo apt install -y curl python3 python3-pip
+# Or use nvm
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash
+nvm install 22
 ```
 
 ### One-line install
@@ -98,12 +73,12 @@ sudo apt install -y curl python3 python3-pip
 curl -fsSL https://raw.githubusercontent.com/hzy9738/codebase-skill/main/scripts/install.sh | bash
 ```
 
-The installer:
+The installer will:
 
-- installs this package with `python3 -m pip install --user`
-- retries with `--break-system-packages` on PEP 668 style Python environments when needed
-- keeps the executable at `~/.local/bin/codebase`
-- installs upstream `codebase-memory-mcp` when possible during setup
+- Check that Node.js >= 19 is available
+- Copy the `codebase` CLI to `~/.local/bin/codebase`
+- Install upstream `codebase-memory-mcp` if not already present
+- Optionally prompt to install the agent skill file
 
 ### Install from a local clone
 
@@ -116,21 +91,21 @@ bash scripts/install.sh
 ## Quick start
 
 ```bash
-codebase index --mode moderate
-codebase func login
-codebase calls login --direction both
-codebase snippet login
-codebase search-code redis --file-pattern '*.go'
-codebase detect-changes
-codebase refresh
+codebase index --mode moderate   # First time: build the index
+codebase func login              # Find functions named "login"
+codebase calls login --direction both  # See callers and callees
+codebase snippet login           # Show the source
+codebase search-code redis --file-pattern '*.go'  # Text search
+codebase detect-changes          # What changed since last index?
+codebase refresh                 # Update stale indexes
 ```
 
 Useful diagnostics:
 
 ```bash
-codebase self-check
-codebase status
-codebase --version
+codebase self-check              # Verify environment is wired correctly
+codebase status                  # Show current session index status
+codebase --version               # Should print v0.6.0
 ```
 
 ## How it works in a project
@@ -149,109 +124,104 @@ codebase --version
 
 Typical workflow:
 
-1. Run `codebase index` once on a fresh project.
-2. Use `codebase func` to discover candidate functions or methods.
-3. Use `codebase calls` and `codebase snippet` after symbol resolution.
-4. Use `codebase search-code` for text-oriented retrieval.
-5. Use `codebase refresh` instead of repeated full re-indexes.
+1. Run `codebase index` once on a fresh project
+2. Use `codebase func` to discover candidate functions or methods
+3. Use `codebase calls` and `codebase snippet` after resolving a symbol
+4. Use `codebase search-code` for text-oriented retrieval
+5. Use `codebase refresh` instead of repeated full re-indexes
 
 Session behavior:
 
-- Index data is isolated per session under `<project>/.codebase/<uuid>/`.
-- Session UUIDs are auto-detected from the parent agent process (Claude Code, Codex, OpenCode) via PID lookup, or generated automatically.
-- Use `codebase --session <id> ...` or `CODEBASE_SESSION=<id>` to override.
-- There is no automatic runtime download on first use. Install the upstream binary explicitly with `codebase install-runtime` if it is missing.
+- Index data is isolated per session under `<project>/.codebase/<uuid>/`
+- Session UUIDs are auto-detected from the parent agent process (Claude Code, Codex, OpenCode) via PID lookup
+- Use `codebase --session <id> ...` or `CODEBASE_SESSION=<id>` to override
+- There is no automatic runtime download on first use — install upstream once with `codebase install-runtime`
 
 ## Optional skill installation
 
-`codebase` is CLI-first — you can call the `codebase` command directly from any agent that runs shell commands. The skill wrapper is optional and intentionally tiny.
-
-To install the skill file interactively:
+A skill file tells AI agents (Claude Code, Codex, OpenCode) how to use the `codebase` CLI. The installer will prompt you during setup, or you can install it manually:
 
 ```bash
 bash scripts/install-skill.sh
 ```
 
-This prompts you to choose a target directory:
+### Supported locations
 
-- `~/.agents/skills` (default)
-- `~/.claude/skills` (Claude Code)
-- `~/.codex/skills` (Codex)
-- `~/.opencode/skills` (OpenCode)
-- `~/.cc-switch/skills` (cc-switch)
-- or a custom path
+| Tool | Default path |
+| --- | --- |
+| General | `~/.agents/skills/codebase/` |
+| Claude Code | `~/.claude/skills/codebase/` |
+| Codex | `~/.codex/skills/codebase/` |
+| OpenCode | `~/.opencode/skills/codebase/` |
 
-You can also pass the path directly:
+After installation, the agent gets a skill stub with:
+
+- Example CLI usage (`func`, `calls`, `snippet`, `refresh`, etc.)
+- Instructions to prefer `codebase` then fall back to `rg`
+- Session and index workflow guidance
+
+## Advanced usage
 
 ```bash
-bash scripts/install-skill.sh ~/.claude/skills
+# Check upstream health
+codebase index-status
+
+# Architecture overview
+codebase architecture
+
+# Run a raw graph query
+codebase query-graph
+
+# Ingest runtime traces
+codebase ingest-traces traces.json
 ```
-
-Recommended `AGENTS.md` rule:
-
-```md
-- 内部代码和文档检索优先使用 `codebase` skill，不可用或无结果时再降级到 `rg`、`fd` 或其他命令。
-```
-
-## Commands
-
-- `status`: show project, cache, metadata, and index state
-- `install-runtime`: explicitly install `codebase-memory-mcp` into `~/.local/bin`
-- `index`: build or rebuild the local index
-- `refresh`: rebuild only when the index is missing or mode changed
-- `projects`: list indexed projects in the current local cache
-- `reset`: delete `.codebase`
-- `self-check`: verify PATH, dependencies, session detection, and index wiring
-- `func`: search indexed functions and methods
-- `calls`: show callers and callees for a resolved symbol
-- `snippet`: print the source snippet for a symbol
-- `search-code`: text/code search with graph-aware ranking
-- `search-graph`: direct wrapper for upstream `search_graph`
-- `trace-path`: direct wrapper for upstream `trace_path`
-- `query-graph`: direct wrapper for upstream `query_graph`
-- `detect-changes`: show changed files and impacted symbols
-- `architecture`: print upstream architecture summary
-- `schema`: print graph schema summary
-- `index-status`: show upstream index status
-- `adr`: get or update ADR content through upstream `manage_adr`
-- `ingest-traces`: forward runtime traces to upstream `ingest_traces`
-
-Runtime resolution order:
-
-1. `CBM_CODEBASE_MEMORY_BIN`
-2. `codebase-memory-mcp` from `PATH`
-3. `~/.local/bin/codebase-memory-mcp`
 
 ## Development
 
-Run the local checks:
-
 ```bash
+git clone https://github.com/hzy9738/codebase-skill.git
+cd codebase-skill
+
+# Run locally
+node bin/codebase --version
+node bin/codebase --help
+
+# Install from local clone
+bash scripts/install.sh
+
+# Run smoke test
 bash tests/smoke_test.sh
 ```
 
-Run the wrapper without installing:
+### Project structure
 
-```bash
-bin/codebase --help
+```text
+bin/codebase          # The CLI entry point (standalone Node.js)
+src/cli.js            # Modular CLI implementation
+scripts/install.sh    # One-line installer
+scripts/install-skill.sh  # Skill stub installer
+skill/SKILL.md        # Agent skill definition
+tests/                # Smoke tests
 ```
-
-Contribution and release workflow:
-
-- see `CONTRIBUTING.md`
-- see `RELEASING.md`
 
 ## GitHub publishing
 
-Copy-ready GitHub repository metadata, About text, topics, and first-release copy live in `GITHUB_PUBLICATION.md`.
+> See [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md) for detailed publishing instructions.
 
-## Limitations
+Quick checklist:
 
-- Index quality and graph behavior still depend on `DeusData/codebase-memory-mcp`
-- First-time indexing cost is mostly the upstream indexer cost
-- `ingest-traces` depends on current upstream runtime edge support
-- This repo is not a replacement for `rg`; it is the indexed retrieval layer you use before falling back
+- [ ] Update `version` in `package.json`
+- [ ] Tag the release: `git tag v0.6.0 && git push origin v0.6.0`
+- [ ] Verify the installer: `curl -fsSL .../install.sh | bash`
+
+## Releasing
+
+See [RELEASING.md](RELEASING.md) for the full release workflow.
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
-MIT
+[MIT](LICENSE)

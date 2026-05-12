@@ -2,66 +2,69 @@
 
 语言： [English](README.md) | **简体中文**
 
-> 面向各类 agent 工作流的本地代码索引 CLI，底层基于 `codebase-memory-mcp`。
+> 一个轻量级的 Node.js CLI 工具，为你的终端带来深度代码检索能力 —— 无需 Python，运行时零 MCP 协议。
 
-`codebase-skill` 是一个本地 CLI 工具，底层使用官方 [`DeusData/codebase-memory-mcp`](https://github.com/DeusData/codebase-memory-mcp) 作为索引和图查询引擎。
-
-它会把索引存到当前项目的 `.codebase/` 下，对外提供全局 `codebase` 命令，并且在日常使用时不依赖 MCP 协议。
+`codebase-skill` 将官方 [`DeusData/codebase-memory-mcp`](https://github.com/DeusData/codebase-memory-mcp) 引擎封装成一个简单的 `codebase` 命令，索引存于项目目录下，会话自动识别，一切通过命令行搞定。
 
 快速导航：[安装](#安装) · [快速开始](#快速开始) · [可选 skill 安装](#可选-skill-安装) · [开发](#开发) · [GitHub 发布](#github-发布)
 
-## 一眼看懂
+## 一目了然
 
 | 项目 | 方案 |
 | --- | --- |
-| 索引存储位置 | 项目目录内的 `.codebase/<uuid>/` |
+| 开发语言 | Node.js（零 Python 依赖） |
+| 索引存储 | 项目目录内的 `.codebase/<uuid>/` |
 | 运行时模型 | 本地 CLI，不走 MCP 协议 |
 | 底层引擎 | `DeusData/codebase-memory-mcp` |
 | 主入口 | `codebase` 命令 |
-| Agent 集成 | 可选安装到 `~/.agents/skills/codebase/SKILL.md` 等目录 |
-| 目标场景 | Codex、Claude Code、OpenCode、Copilot、本地 CLI |
+| Agent 集成 | 可选安装到 `~/.agents/skills/codebase/` |
+| 适用场景 | Codex、Claude Code、OpenCode、Copilot、终端 |
 
 ## 你能得到什么
 
+- 一个全局可用的 `codebase` 命令
 - 项目本地索引，数据放在 `.codebase/<uuid>/`
-- 一个普通 shell 命令：`codebase`
+- 为 Agent 优化的默认命令：`func`、`calls`、`snippet`、`search-code`、`detect-changes`、`refresh`
 - 可选的多工具 skill 安装
-- 更适合 agent 工作流的默认命令：`func`、`calls`、`snippet`、`search-code`、`detect-changes`、`refresh`
-- 不依赖 git，不要求运行时 MCP server
+- 不依赖 git、不依赖 MCP 运行时、不依赖 Python
 
-## 它和上游的关系
+## 与上游的关系
 
-`codebase-memory-mcp` 仍然是实际负责索引和图查询的核心引擎；这个仓库提供的是：
+`codebase-memory-mcp` 仍然是实际负责索引和图查询的核心引擎。这个仓库提供的是：
 
 - 项目内本地索引存储约定
-- 更适合 agent 直接调用的 CLI 工作流
+- 更适合 Agent 直接调用的 CLI 工作流
 - 刷新元数据
-- 一个很小的可选 skill stub，支持 Claude Code、Codex、OpenCode 等工具
+- 一个轻量级的 skill stub，支持 Claude Code、Codex、OpenCode 等工具
 
-如果你想直接使用上游原始能力，可以直接调用上游工具；如果你想要更务实的本地代码检索工作流，就用这个仓库。
+如果想直接使用上游原始能力，可以调用官方工具；如果想用更务实的本地代码检索方案，就用这个仓库。
 
-## 为什么做这个
+## 为什么做这个项目
 
-这个项目面向的是想要 code-index 类效果、但又不想每次检索都走一层 MCP 往返的人。
+面向想要代码索引效果、但又不想每次查询都走 MCP 往返的团队和个人：
 
-- 把索引留在项目本地，而不是散落到外部状态目录。
-- 让 agent 直接调用稳定的 `codebase` 命令，而不是依赖协议层。
-- 让项目说明或 agent 提示保持简单：优先 `codebase`，再降级到 `rg`。
-- 复用上游图引擎能力，但避免 MCP 运行时开销。
+- 索引留在项目本地，而不是散落到外部目录
+- Agent 直接调用稳定的 `codebase` 命令，不依赖协议层
+- 提示词保持简单：优先 `codebase`，再降级到 `rg`
+- 复用上游引擎能力，但避开 MCP 运行时开销
 
 ## 安装
 
-### 前置依赖（macOS）
+### 前置条件
+
+需要 Node.js >= 19。选择你喜欢的方式安装：
 
 ```bash
+# macOS
 brew install node
-```
 
-### 前置依赖（Ubuntu 24.04）
+# Linux (Ubuntu)
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt-get install -y nodejs
 
-```bash
-sudo apt update
-sudo apt install -y curl nodejs npm
+# 或者用 nvm
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.0/install.sh | bash
+nvm install 22
 ```
 
 ### 一行安装
@@ -70,14 +73,14 @@ sudo apt install -y curl nodejs npm
 curl -fsSL https://raw.githubusercontent.com/hzy9738/codebase-skill/main/scripts/install.sh | bash
 ```
 
-安装脚本会做这些事：
+安装脚本会做以下事情：
 
-- 确保 Node.js >= 19 可用
-- 通过 `npm install -g` 全局安装当前包
-- 把可执行命令安装到 `~/.local/bin/codebase`
-- 在安装阶段尽量把 `codebase-memory-mcp` 一起装好
+- 检查 Node.js >= 19 是否可用
+- 将 `codebase` CLI 复制到 `~/.local/bin/codebase`
+- 如果尚未安装，自动安装上游 `codebase-memory-mcp`
+- 可选：提示是否安装 Agent skill 文件
 
-### 从本地 clone 安装
+### 从本地克隆安装
 
 ```bash
 git clone https://github.com/hzy9738/codebase-skill.git
@@ -88,21 +91,21 @@ bash scripts/install.sh
 ## 快速开始
 
 ```bash
-codebase index --mode moderate
-codebase func login
-codebase calls login --direction both
-codebase snippet login
-codebase search-code redis --file-pattern '*.go'
-codebase detect-changes
-codebase refresh
+codebase index --mode moderate   # 首次使用：构建索引
+codebase func login              # 搜索名为 "login" 的函数
+codebase calls login --direction both  # 查看调用者和被调用者
+codebase snippet login           # 查看函数源码
+codebase search-code redis --file-pattern '*.go'  # 文本搜索
+codebase detect-changes          # 上次索引以来有什么变化？
+codebase refresh                 # 增量刷新索引
 ```
 
 常用诊断命令：
 
 ```bash
-codebase self-check
-codebase status
-codebase --version
+codebase self-check              # 检查环境配置是否正确
+codebase status                  # 查看当前会话索引状态
+codebase --version               # 应该显示 v0.6.0
 ```
 
 ## 在项目里怎么工作
@@ -121,109 +124,104 @@ codebase --version
 
 典型工作流：
 
-1. 新项目先执行一次 `codebase index`。
-2. 用 `codebase func` 找函数或方法。
-3. 用 `codebase calls` 和 `codebase snippet` 看调用关系和源码。
-4. 用 `codebase search-code` 做偏文本的检索。
-5. 日常更新时优先用 `codebase refresh`，不要反复全量重建。
+1. 新项目首次运行 `codebase index`
+2. 用 `codebase func` 查找候选函数或方法
+3. 定位到目标符号后，用 `codebase calls` 和 `codebase snippet` 深入了解
+4. 用 `codebase search-code` 进行文本搜索
+5. 后续用 `codebase refresh` 增量更新，而非反复全量重建
 
-会话行为：
+会话机制说明：
 
-- 索引按 session 隔离，路径是 `<project>/.codebase/<uuid>/`。
-- Session UUID 通过遍历父进程 PID 自动检测（Claude Code 读取 `~/.claude/sessions/<pid>.json`；Codex/OpenCode 从命令行提取），检测不到则自动生成随机 UUID。
-- 也可以手动用 `codebase --session <id> ...` 或 `CODEBASE_SESSION=<id>` 覆盖。
-- 首次正常使用时不会自动联网下载运行时；如果缺少 `codebase-memory-mcp`，请显式执行 `codebase install-runtime`。
+- 索引数据按会话隔离，存储在 `<project>/.codebase/<uuid>/`
+- 会话 UUID 通过 PID 查找自动识别父级 Agent 进程（Claude Code、Codex、OpenCode）
+- 可通过 `codebase --session <id> ...` 或 `CODEBASE_SESSION=<id>` 手动指定
+- 首次使用不会自动下载运行环境 —— 请先用 `codebase install-runtime` 一次性安装
 
 ## 可选 skill 安装
 
-`codebase` 本质上是 CLI-first，任何能执行 shell 命令的 agent 都能直接调用。skill 封装是可选的，且刻意保持很小。
-
-交互式安装 skill 文件：
+skill 文件能告诉 AI Agent（Claude Code、Codex、OpenCode）如何调用 `codebase` CLI。安装器会在设置过程中提示，也可以手动安装：
 
 ```bash
 bash scripts/install-skill.sh
 ```
 
-运行后会提示选择安装目录：
+### 支持的安装路径
 
-- `~/.agents/skills`（默认）
-- `~/.claude/skills`（Claude Code）
-- `~/.codex/skills`（Codex）
-- `~/.opencode/skills`（OpenCode）
-- `~/.cc-switch/skills`（cc-switch）
-- 或手动输入路径
+| 工具 | 默认路径 |
+| --- | --- |
+| 通用 | `~/.agents/skills/codebase/` |
+| Claude Code | `~/.claude/skills/codebase/` |
+| Codex | `~/.codex/skills/codebase/` |
+| OpenCode | `~/.opencode/skills/codebase/` |
 
-也可以直接传参指定：
+安装后，Agent 会获得一个 skill stub，包含：
+
+- CLI 命令示例（`func`、`calls`、`snippet`、`refresh` 等）
+- 优先使用 `codebase`，降级到 `rg` 的指引
+- 会话和索引工作流说明
+
+## 进阶用法
 
 ```bash
-bash scripts/install-skill.sh ~/.claude/skills
+# 检查上游健康状态
+codebase index-status
+
+# 查看架构概览
+codebase architecture
+
+# 执行原生图查询
+codebase query-graph
+
+# 导入运行时追踪数据
+codebase ingest-traces traces.json
 ```
-
-推荐写进项目 `AGENTS.md` 的规则：
-
-```md
-- 内部代码和文档检索优先使用 `codebase` skill，不可用或无结果时再降级到 `rg`、`fd` 或其他命令。
-```
-
-## 命令列表
-
-- `status`：查看项目、缓存、元数据和索引状态
-- `install-runtime`：显式把 `codebase-memory-mcp` 安装到 `~/.local/bin`
-- `index`：构建或重建本地索引
-- `refresh`：仅在索引缺失或模式变化时重建
-- `projects`：列出当前本地缓存里的索引项目
-- `reset`：删除 `.codebase`
-- `self-check`：检查 PATH、依赖、session 识别和工具连通性
-- `func`：搜索已索引的函数和方法
-- `calls`：查看某个符号的调用方和被调用方
-- `snippet`：打印某个符号对应的源码片段
-- `search-code`：带图排序能力的文本/代码搜索
-- `search-graph`：直接包装上游 `search_graph`
-- `trace-path`：直接包装上游 `trace_path`
-- `query-graph`：直接包装上游 `query_graph`
-- `detect-changes`：查看变更文件和受影响符号
-- `architecture`：输出架构摘要
-- `schema`：输出图 schema 摘要
-- `index-status`：查看上游索引状态
-- `adr`：通过上游 `manage_adr` 获取或更新 ADR
-- `ingest-traces`：通过上游 `ingest_traces` 注入运行时 trace
-
-运行时查找顺序：
-
-1. `CBM_CODEBASE_MEMORY_BIN`
-2. `PATH` 里的 `codebase-memory-mcp`
-3. `~/.local/bin/codebase-memory-mcp`
 
 ## 开发
 
-本地检查：
-
 ```bash
+git clone https://github.com/hzy9738/codebase-skill.git
+cd codebase-skill
+
+# 本地运行
+node bin/codebase --version
+node bin/codebase --help
+
+# 从本地副本安装
+bash scripts/install.sh
+
+# 运行冒烟测试
 bash tests/smoke_test.sh
 ```
 
-不安装、直接运行包装器：
+### 项目结构
 
-```bash
-bin/codebase --help
+```text
+bin/codebase          # CLI 入口（独立 Node.js 脚本）
+src/cli.js            # 模块化 CLI 实现
+scripts/install.sh    # 一行安装脚本
+scripts/install-skill.sh  # Skill 安装脚本
+skill/SKILL.md        # Agent skill 定义
+tests/                # 冒烟测试
 ```
-
-贡献和发布流程：
-
-- 见 `CONTRIBUTING.md`
-- 见 `RELEASING.md`
 
 ## GitHub 发布
 
-仓库 About、topics、首个 release 文案等可直接复用的内容放在 `GITHUB_PUBLICATION.md`。
+> 详细发布指南请参考 [GITHUB_PUBLICATION.md](GITHUB_PUBLICATION.md)
 
-## 限制
+快速清单：
 
-- 索引质量和图行为仍然依赖 `DeusData/codebase-memory-mcp`
-- 首次建索引的主要成本仍然来自上游索引器
-- `ingest-traces` 仍受上游 runtime edge 能力限制
-- 它不是 `rg` 的替代品，而是优先使用的索引检索层
+- [ ] 更新 `package.json` 中的 `version`
+- [ ] 打标签发布：`git tag v0.6.0 && git push origin v0.6.0`
+- [ ] 验证安装器：`curl -fsSL .../install.sh | bash`
+
+## 发布流程
+
+完整发布流程请参考 [RELEASING.md](RELEASING.md)。
+
+## 参与贡献
+
+欢迎贡献！请参考 [CONTRIBUTING.md](CONTRIBUTING.md) 了解准则。
 
 ## 许可证
 
-MIT
+[MIT](LICENSE)
