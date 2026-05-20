@@ -6,6 +6,34 @@ const fs = require("fs");
 
 const VERSION = "0.6.0";
 
+// Commands handled locally (not forwarded to upstream)
+const LOCAL_COMMANDS = new Set(["install-runtime"]);
+
+// Map user-facing command names to upstream tool names
+const COMMAND_MAP = {
+  "index": "index_repository",
+  "refresh": "index_repository",
+  "projects": "list_projects",
+  "reset": "delete_project",
+  "func": "search_graph",
+  "calls": "trace_path",
+  "snippet": "get_code_snippet",
+  "search-graph": "search_graph",
+  "trace-path": "trace_path",
+  "search-code": "search_code",
+  "query-graph": "query_graph",
+  "detect-changes": "detect_changes",
+  "architecture": "get_architecture",
+  "schema": "get_graph_schema",
+  "index-status": "index_status",
+  "adr": "manage_adr",
+  "ingest-traces": "ingest_traces",
+};
+
+// Commands that accept extra positional args (e.g. func <keyword>, calls <symbol>)
+// These need to be forwarded as JSON: cli <tool> '{"keyword":"<arg>"}'
+const ARGS_TOOLS = new Set(["search_graph", "trace_path", "get_code_snippet"]);
+
 function findCodebaseMemoryMcp() {
   const possiblePaths = [
     "codebase-memory-mcp",
@@ -24,6 +52,38 @@ function findCodebaseMemoryMcp() {
   return null;
 }
 
+function printHelp() {
+  console.log("codebase " + VERSION);
+  console.log("Local repository-scoped wrapper around codebase-memory-mcp");
+  console.log();
+  console.log("Usage: codebase [command] [options]");
+  console.log();
+  console.log("Commands:");
+  console.log("  install-runtime     Install codebase-memory-mcp into ~/.local/bin");
+  console.log("  index               Build the local index under .codebase/<session>");
+  console.log("  refresh             Rebuild only when local index is stale");
+  console.log("  projects            List indexed projects in local cache");
+  console.log("  reset               Delete the local .codebase/<session> index");
+  console.log("  func <keyword>      Search indexed functions and methods");
+  console.log("  calls <symbol>      Show callers and callees for a symbol");
+  console.log("  snippet <symbol>    Show source for a symbol");
+  console.log("  search-graph        Direct wrapper around search_graph");
+  console.log("  trace-path          Direct wrapper around trace_path");
+  console.log("  search-code         Text/code search with graph-aware ranking");
+  console.log("  query-graph         Run a graph query directly");
+  console.log("  detect-changes      Show changed files and impacted symbols");
+  console.log("  architecture        Get architecture summary");
+  console.log("  schema              Get graph schema summary");
+  console.log("  index-status        Get upstream index status");
+  console.log("  adr                 Manage ADR content via upstream manage_adr");
+  console.log("  ingest-traces       Ingest runtime traces from a JSON file");
+  console.log();
+  console.log("Options:");
+  console.log("  -v, --version       Show version");
+  console.log("  -h, --help          Show this help message");
+  console.log("  -s, --session       Session ID override");
+}
+
 async function main() {
   const args = process.argv.slice(2);
 
@@ -33,38 +93,20 @@ async function main() {
   }
 
   if (args.includes("--help") || args.includes("-h") || args.length === 0) {
-    console.log("codebase " + VERSION);
-    console.log("Local repository-scoped wrapper around codebase-memory-mcp");
-    console.log();
-    console.log("Usage: codebase [command] [options]");
-    console.log();
-    console.log("Commands:");
-    console.log("  install-runtime     Install codebase-memory-mcp into ~/.local/bin");
-    console.log("  status              Show local index status for the current session");
-    console.log("  index               Build the local index under .codebase/<session>");
-    console.log("  refresh             Rebuild only when local index is stale");
-    console.log("  projects            List indexed projects in local cache");
-    console.log("  reset               Delete the local .codebase/<session> index");
-    console.log("  self-check          Verify environment and repo wiring");
-    console.log("  func                Search indexed functions and methods");
-    console.log("  calls               Show callers and callees for a symbol");
-    console.log("  snippet             Show source for a symbol");
-    console.log("  search-graph        Direct wrapper around search_graph");
-    console.log("  trace-path          Direct wrapper around trace_path");
-    console.log("  search-code         Text/code search with graph-aware ranking");
-    console.log("  query-graph         Run a graph query directly");
-    console.log("  detect-changes      Show changed files and impacted symbols");
-    console.log("  architecture        Get architecture summary");
-    console.log("  schema              Get graph schema summary");
-    console.log("  index-status        Get upstream index status");
-    console.log("  adr                 Manage ADR content via upstream manage_adr");
-    console.log("  ingest-traces       Ingest runtime traces from a JSON file");
-    console.log();
-    console.log("Options:");
-    console.log("  -v, --version       Show version");
-    console.log("  -h, --help          Show this help message");
-    console.log("  -s, --session       Session ID override");
+    printHelp();
     return;
+  }
+
+  const cmd = args[0];
+
+  // Handle local commands
+  if (LOCAL_COMMANDS.has(cmd)) {
+    if (cmd === "install-runtime") {
+      console.error("Error: 'install-runtime' is not supported in this context.");
+      console.error("Please install codebase-memory-mcp manually:");
+      console.error("  curl -fsSL https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh | bash");
+      process.exit(1);
+    }
   }
 
   const cbm = findCodebaseMemoryMcp();
@@ -75,7 +117,22 @@ async function main() {
     process.exit(1);
   }
 
-  const child = spawn(cbm, ["cli", ...args], { stdio: "inherit", env: process.env });
+  // Map command name to upstream tool name
+  const toolName = COMMAND_MAP[cmd] || cmd;
+  let cbmArgs;
+
+  if (ARGS_TOOLS.has(toolName) && args.length >= 2) {
+    // For func/calls/snippet: forward extra arg as JSON
+    const paramKey = toolName === "search_graph" ? "keyword"
+                   : toolName === "trace_path" ? "function_name"
+                   : "symbol_name";
+    const jsonArg = JSON.stringify({ [paramKey]: args[1] });
+    cbmArgs = ["cli", toolName, jsonArg];
+  } else {
+    cbmArgs = ["cli", toolName, ...args.slice(1)];
+  }
+
+  const child = spawn(cbm, cbmArgs, { stdio: "inherit", env: process.env });
   child.on("close", function(code) { process.exit(code || 0); });
   child.on("error", function(err) { console.error("Error:", err.message); process.exit(1); });
 }

@@ -10,7 +10,7 @@ Use this skill when you want deeper repository retrieval than plain text grep, b
 ## Quick start
 
 ```bash
-codebase status
+codebase index-status
 codebase refresh
 codebase func auth
 codebase calls createUser --direction both

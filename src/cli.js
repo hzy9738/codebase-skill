@@ -4,15 +4,39 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-// Version
 const VERSION = '0.6.0';
 
-// Find codebase-memory-mcp
+// Commands handled locally (not forwarded to upstream)
+const LOCAL_COMMANDS = new Set(['install-runtime']);
+
+// Map user-facing command names to upstream tool names
+const COMMAND_MAP = {
+  'index': 'index_repository',
+  'refresh': 'index_repository',
+  'projects': 'list_projects',
+  'reset': 'delete_project',
+  'func': 'search_graph',
+  'calls': 'trace_path',
+  'snippet': 'get_code_snippet',
+  'search-graph': 'search_graph',
+  'trace-path': 'trace_path',
+  'search-code': 'search_code',
+  'query-graph': 'query_graph',
+  'detect-changes': 'detect_changes',
+  'architecture': 'get_architecture',
+  'schema': 'get_graph_schema',
+  'index-status': 'index_status',
+  'adr': 'manage_adr',
+  'ingest-traces': 'ingest_traces',
+};
+
+// Commands that accept extra positional args (e.g. func <keyword>, calls <symbol>)
+// These need to be forwarded as JSON: cli <tool> '{"keyword":"<arg>"}'
+const ARGS_TOOLS = new Set(['search_graph', 'trace_path', 'get_code_snippet']);
+
 function findCodebaseMemoryMcp() {
   const possiblePaths = [
-    // Check PATH
     'codebase-memory-mcp',
-    // Common locations
     path.join(process.env.HOME || '', '.local/bin/codebase-memory-mcp'),
     '/usr/local/bin/codebase-memory-mcp',
     '/opt/homebrew/bin/codebase-memory-mcp',
@@ -20,7 +44,6 @@ function findCodebaseMemoryMcp() {
 
   for (const binaryPath of possiblePaths) {
     try {
-      // Check if exists and is executable
       if (fs.existsSync(binaryPath)) {
         const stats = fs.statSync(binaryPath);
         if (stats.isFile() && (stats.mode & 0o111)) {
@@ -35,52 +58,6 @@ function findCodebaseMemoryMcp() {
   return null;
 }
 
-// Main CLI function
-async function main() {
-  const args = process.argv.slice(2);
-  
-  // Check for version flag
-  if (args.includes('--version') || args.includes('-v')) {
-    console.log(`codebase ${VERSION}`);
-    return;
-  }
-  
-  // Check for help flag
-  if (args.includes('--help') || args.includes('-h') || args.length === 0) {
-    printHelp();
-    return;
-  }
-  
-  // Find codebase-memory-mcp
-  const cbmBinary = findCodebaseMemoryMcp();
-  if (!cbmBinary) {
-    console.error('Error: codebase-memory-mcp not found.');
-    console.error('Please install it first:');
-    console.error('  curl -fsSL https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh | bash');
-    process.exit(1);
-  }
-
-  // Prepare arguments for codebase-memory-mcp cli
-  const cbmArgs = ['cli', ...args];
-  
-  // Spawn the process
-  const child = spawn(cbmBinary, cbmArgs, {
-    stdio: 'inherit',
-    env: process.env,
-  });
-
-  // Handle process exit
-  child.on('close', (code) => {
-    process.exit(code || 0);
-  });
-
-  child.on('error', (error) => {
-    console.error('Error executing codebase-memory-mcp:', error.message);
-    process.exit(1);
-  });
-}
-
-// Print help message
 function printHelp() {
   console.log(`codebase ${VERSION}`);
   console.log('Local repository-scoped wrapper around codebase-memory-mcp');
@@ -90,15 +67,13 @@ function printHelp() {
   console.log();
   console.log('Commands:');
   console.log('  install-runtime     Install codebase-memory-mcp into ~/.local/bin');
-  console.log('  status              Show local index status for the current session');
   console.log('  index               Build the local index under .codebase/<session>');
   console.log('  refresh             Rebuild only when local index is stale');
   console.log('  projects            List indexed projects in local cache');
   console.log('  reset               Delete the local .codebase/<session> index');
-  console.log('  self-check          Verify environment and repo wiring');
-  console.log('  func                Search indexed functions and methods');
-  console.log('  calls               Show callers and callees for a symbol');
-  console.log('  snippet             Show source for a symbol');
+  console.log('  func <keyword>      Search indexed functions and methods');
+  console.log('  calls <symbol>      Show callers and callees for a symbol');
+  console.log('  snippet <symbol>    Show source for a symbol');
   console.log('  search-graph        Direct wrapper around search_graph');
   console.log('  trace-path          Direct wrapper around trace_path');
   console.log('  search-code         Text/code search with graph-aware ranking');
@@ -116,7 +91,69 @@ function printHelp() {
   console.log('  -s, --session       Session ID override');
 }
 
-// Always run main
+async function main() {
+  const args = process.argv.slice(2);
+
+  if (args.includes('--version') || args.includes('-v')) {
+    console.log(`codebase ${VERSION}`);
+    return;
+  }
+
+  if (args.includes('--help') || args.includes('-h') || args.length === 0) {
+    printHelp();
+    return;
+  }
+
+  const cmd = args[0];
+
+  // Handle local commands
+  if (LOCAL_COMMANDS.has(cmd)) {
+    if (cmd === 'install-runtime') {
+      console.error("Error: 'install-runtime' is not supported in this context.");
+      console.error('Please install codebase-memory-mcp manually:');
+      console.error('  curl -fsSL https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh | bash');
+      process.exit(1);
+    }
+  }
+
+  const cbmBinary = findCodebaseMemoryMcp();
+  if (!cbmBinary) {
+    console.error('Error: codebase-memory-mcp not found.');
+    console.error('Please install it first:');
+    console.error('  curl -fsSL https://raw.githubusercontent.com/DeusData/codebase-memory-mcp/main/install.sh | bash');
+    process.exit(1);
+  }
+
+  // Map command name to upstream tool name
+  const toolName = COMMAND_MAP[cmd] || cmd;
+  let cbmArgs;
+
+  if (ARGS_TOOLS.has(toolName) && args.length >= 2) {
+    // For func/calls/snippet: forward extra arg as JSON
+    const paramKey = toolName === 'search_graph' ? 'keyword'
+                   : toolName === 'trace_path' ? 'function_name'
+                   : 'symbol_name';
+    const jsonArg = JSON.stringify({ [paramKey]: args[1] });
+    cbmArgs = ['cli', toolName, jsonArg];
+  } else {
+    cbmArgs = ['cli', toolName, ...args.slice(1)];
+  }
+
+  const child = spawn(cbmBinary, cbmArgs, {
+    stdio: 'inherit',
+    env: process.env,
+  });
+
+  child.on('close', (code) => {
+    process.exit(code || 0);
+  });
+
+  child.on('error', (error) => {
+    console.error('Error executing codebase-memory-mcp:', error.message);
+    process.exit(1);
+  });
+}
+
 main().catch((error) => {
   console.error('Fatal error:', error);
   process.exit(1);
