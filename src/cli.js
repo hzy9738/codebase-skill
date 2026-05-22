@@ -4,7 +4,7 @@ const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-const VERSION = '0.6.0';
+const VERSION = '0.6.1';
 
 // Commands handled locally (not forwarded to upstream)
 const LOCAL_COMMANDS = new Set(['install-runtime']);

@@ -105,7 +105,7 @@ Useful diagnostics:
 ```bash
 codebase self-check              # Verify environment is wired correctly
 codebase status                  # Show current session index status
-codebase --version               # Should print v0.6.0
+codebase --version               # Should print v0.6.1
 ```
 
 ## How it works in a project
@@ -211,7 +211,7 @@ tests/                # Smoke tests
 Quick checklist:
 
 - [ ] Update `version` in `package.json`
-- [ ] Tag the release: `git tag v0.6.0 && git push origin v0.6.0`
+- [ ] Tag the release: `git tag v0.6.1 && git push origin v0.6.1`
 - [ ] Verify the installer: `curl -fsSL .../install.sh | bash`
 
 ## Releasing

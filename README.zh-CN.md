@@ -105,7 +105,7 @@ codebase refresh                 # 增量刷新索引
 ```bash
 codebase self-check              # 检查环境配置是否正确
 codebase status                  # 查看当前会话索引状态
-codebase --version               # 应该显示 v0.6.0
+codebase --version               # 应该显示 v0.6.1
 ```
 
 ## 在项目里怎么工作
@@ -211,7 +211,7 @@ tests/                # 冒烟测试
 快速清单：
 
 - [ ] 更新 `package.json` 中的 `version`
-- [ ] 打标签发布：`git tag v0.6.0 && git push origin v0.6.0`
+- [ ] 打标签发布：`git tag v0.6.1 && git push origin v0.6.1`
 - [ ] 验证安装器：`curl -fsSL .../install.sh | bash`
 
 ## 发布流程
